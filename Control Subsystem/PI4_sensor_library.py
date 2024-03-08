@@ -219,6 +219,19 @@ class QwiicKX13X(object):
 
 ##############################################################################################################################################
 ##############################################################################################################################################
+
+BME680_I2C_ADDRESS = 0x76
+
+#Accelerometer
+class BME680(object):
+
+    def __init__(self, bus=None, network=None, addr=BME680_I2C_ADDRESS):
+        #Attach sensor to I2C connection
+        if network == None:
+            self.i2c = create_unified_i2c(bus=bus)
+        else:
+            self.i2c = network
+        self.addr = addr
     
 
 
