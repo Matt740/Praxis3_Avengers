@@ -136,7 +136,7 @@ class QwiicKX13X(object):
             initialization
         '''
         #force restart
-        self.accel_control(False)
+        self.set_power_mode(False)
         
         # Get specific wanted settings
         reg_value = 0x02 | performance
