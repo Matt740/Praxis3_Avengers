@@ -1,4 +1,6 @@
 import smbus2
+import serial
+import RPi.GPIO as GPIO
 
 # I2C RELEVANT CLASSES
 ###############################################################################################################
@@ -255,3 +257,31 @@ class BME680(object):
 
 ##############################################################################################################################################
 ##############################################################################################################################################
+
+UART_PIN = '/dev/ttyS0'
+
+class L76B(object):
+
+    #Baud rate
+    SET_NMEA_BAUDRATE          = '$PMTK251'
+    SET_NMEA_BAUDRATE_115200   = 115200
+    SET_NMEA_BAUDRATE_57600    = 57600
+    SET_NMEA_BAUDRATE_38400    = 38400
+    SET_NMEA_BAUDRATE_19200    = 19200
+    SET_NMEA_BAUDRATE_14400    = 14400
+    SET_NMEA_BAUDRATE_9600     = 9600
+    SET_NMEA_BAUDRATE_4800     = 4800
+
+    def __init__(self, StandByPin, ForcePin):
+        self.ser = serial.Serial(port=UART_PIN, 
+                                 baudrate=9600, 
+                                 parity=serial.PARITY_NONE, 
+                                 stopbits=serial.STOPBITS_ONE,
+                                 bytesize=serial.EIGHTBITS,
+                                 timeout=1000)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(StandByPin, GPIO.OUT)
+        GPIO.setup(ForcePin, GPIO.OUT)
+        GPIO.output(StandByPin, GPIO.LOW)
+        GPIO.output(ForcePin, GPIO.LOW)
+
