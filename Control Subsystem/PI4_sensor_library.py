@@ -228,11 +228,33 @@ BME680_I2C_ADDRESS = 0x76
 #Accelerometer
 class BME680(object):
 
+    #Todo
+    #Change constants
+    #Update I2C functions
+
     SLEEP_MODE = 0
     FORCED_MODE = 1
     CONF_T_P_MODE_ADDR = 0x74
     MODE_MSK = 0x03
     MODE_POS = 0
+    POLL_PERIOD_MS = 10
+    CONF_T_P_MODE_ADDR = 0x74
+    FIELD0_ADDR = 0x1d
+    NEW_DATA_MSK = 0x80
+    FIELD_LENGTH = 17
+    GAS_INDEX_MSK = 0x0f
+    COEFF_ADDR1 = 0x89
+    COEFF_ADDR2 = 0xe1
+    COEFF_ADDR1_LEN = 25
+    COEFF_ADDR2_LEN = 16
+    ADDR_RES_HEAT_VAL_ADDR = 0x00
+    ADDR_RES_HEAT_RANGE_ADDR = 0x02
+    ADDR_RANGE_SW_ERR_ADDR = 0x04
+    CONF_ODR_FILT_ADDR = 0x75
+    FILTER_MSK = 0X1C
+    FILTER_POS = 2
+    OSP_MSK = 0X1C
+    OSP_POS = 2
 
     def __init__(self, bus=None, network=None, addr=BME680_I2C_ADDRESS):
         #Attach sensor to I2C connection
@@ -241,6 +263,22 @@ class BME680(object):
         else:
             self.i2c = network
         self.addr = addr
+
+        self.soft_reset()
+        self.set_power_mode(constants.SLEEP_MODE)
+
+        self._get_calibration_data()
+
+        #self.set_humidity_oversample(constants.OS_2X)
+        self.set_pressure_oversample(constants.OS_4X)
+        #self.set_temperature_oversample(constants.OS_8X)
+        self.set_filter(constants.FILTER_SIZE_3)
+        #if self._variant == constants.VARIANT_HIGH:
+        #    self.set_gas_status(constants.ENABLE_GAS_MEAS_HIGH)
+        #else:
+        #    self.set_gas_status(constants.ENABLE_GAS_MEAS_LOW)
+        self.set_temp_offset(0)
+        self.get_sensor_data()
     
     def set_power_mode(self, value, blocking=True):
         """Set power mode."""
@@ -252,12 +290,31 @@ class BME680(object):
         self._set_bits(self.CONF_T_P_MODE_ADDR, self.MODE_MSK, self.MODE_POS, value)
 
         while blocking and self.get_power_mode() != self.power_mode:
-            time.sleep(constants.POLL_PERIOD_MS / 1000.0)
+            time.sleep(self.POLL_PERIOD_MS / 1000.0)
 
     def get_power_mode(self):
         """Get power mode."""
-        self.power_mode = self._get_regs(constants.CONF_T_P_MODE_ADDR, 1)
+        self.power_mode = self._get_regs(self.CONF_T_P_MODE_ADDR, 1)
         return self.power_mode
+
+    def _get_calibration_data(self):
+        """Retrieve the sensor calibration data and store it in .calibration_data."""
+        calibration = self._get_regs(self.COEFF_ADDR1, self.COEFF_ADDR1_LEN)
+        calibration += self._get_regs(self.COEFF_ADDR2, self.COEFF_ADDR2_LEN)
+
+        heat_range = self._get_regs(self.ADDR_RES_HEAT_RANGE_ADDR, 1)
+        heat_value = self.twos_comp(self._get_regs(self.ADDR_RES_HEAT_VAL_ADDR, 1), bits=8)
+        sw_error = self.twos_comp(self._get_regs(self.ADDR_RANGE_SW_ERR_ADDR, 1), bits=8)
+
+        self.calibration_data.set_from_array(calibration)
+        self.calibration_data.set_other(heat_range, heat_value, sw_error)
+
+    def twos_comp(val, bits=16):
+        """Convert two bytes into a two's compliment signed word."""
+        # TODO: Reimpliment with struct
+        if val & (1 << (bits - 1)) != 0:
+            val = val - (1 << bits)
+        return val
 
     def get_sensor_data(self):
         """Get sensor data.
@@ -265,50 +322,50 @@ class BME680(object):
         Stores data in .data and returns True upon success.
 
         """
-        self.set_power_mode(constants.FORCED_MODE)
+        self.set_power_mode(self.FORCED_MODE)
 
         for attempt in range(10):
-            status = self._get_regs(constants.FIELD0_ADDR, 1)
+            status = self._get_regs(self.FIELD0_ADDR, 1)
 
-            if (status & constants.NEW_DATA_MSK) == 0:
-                time.sleep(constants.POLL_PERIOD_MS / 1000.0)
+            if (status & self.NEW_DATA_MSK) == 0:
+                time.sleep(self.POLL_PERIOD_MS / 1000.0)
                 continue
 
-            regs = self._get_regs(constants.FIELD0_ADDR, constants.FIELD_LENGTH)
+            regs = self._get_regs(self.FIELD0_ADDR, self.FIELD_LENGTH)
 
-            self.data.status = regs[0] & constants.NEW_DATA_MSK
+            self.data.status = regs[0] & self.NEW_DATA_MSK
             # Contains the nb_profile used to obtain the current measurement
-            self.data.gas_index = regs[0] & constants.GAS_INDEX_MSK
+            #self.data.gas_index = regs[0] & self.GAS_INDEX_MSK
             self.data.meas_index = regs[1]
 
             adc_pres = (regs[2] << 12) | (regs[3] << 4) | (regs[4] >> 4)
-            adc_temp = (regs[5] << 12) | (regs[6] << 4) | (regs[7] >> 4)
-            adc_hum = (regs[8] << 8) | regs[9]
-            adc_gas_res_low = (regs[13] << 2) | (regs[14] >> 6)
-            adc_gas_res_high = (regs[15] << 2) | (regs[16] >> 6)
-            gas_range_l = regs[14] & constants.GAS_RANGE_MSK
-            gas_range_h = regs[16] & constants.GAS_RANGE_MSK
+            #adc_temp = (regs[5] << 12) | (regs[6] << 4) | (regs[7] >> 4)
+            #adc_hum = (regs[8] << 8) | regs[9]
+            #adc_gas_res_low = (regs[13] << 2) | (regs[14] >> 6)
+            #adc_gas_res_high = (regs[15] << 2) | (regs[16] >> 6)
+            #gas_range_l = regs[14] & constants.GAS_RANGE_MSK
+            #gas_range_h = regs[16] & constants.GAS_RANGE_MSK
 
-            if self._variant == constants.VARIANT_HIGH:
-                self.data.status |= regs[16] & constants.GASM_VALID_MSK
-                self.data.status |= regs[16] & constants.HEAT_STAB_MSK
-            else:
-                self.data.status |= regs[14] & constants.GASM_VALID_MSK
-                self.data.status |= regs[14] & constants.HEAT_STAB_MSK
+           # if self._variant == constants.VARIANT_HIGH:
+            #    self.data.status |= regs[16] & constants.GASM_VALID_MSK
+            #    self.data.status |= regs[16] & constants.HEAT_STAB_MSK
+            #else:
+            #    self.data.status |= regs[14] & constants.GASM_VALID_MSK
+            #    self.data.status |= regs[14] & constants.HEAT_STAB_MSK
 
-            self.data.heat_stable = (self.data.status & constants.HEAT_STAB_MSK) > 0
+            #self.data.heat_stable = (self.data.status & constants.HEAT_STAB_MSK) > 0
 
-            temperature = self._calc_temperature(adc_temp)
-            self.data.temperature = temperature / 100.0
-            self.ambient_temperature = temperature  # Saved for heater calc
+            #temperature = self._calc_temperature(adc_temp)
+            #self.data.temperature = temperature / 100.0
+            #self.ambient_temperature = temperature  # Saved for heater calc
 
             self.data.pressure = self._calc_pressure(adc_pres) / 100.0
-            self.data.humidity = self._calc_humidity(adc_hum) / 1000.0
+            #self.data.humidity = self._calc_humidity(adc_hum) / 1000.0
 
-            if self._variant == constants.VARIANT_HIGH:
-                self.data.gas_resistance = self._calc_gas_resistance_high(adc_gas_res_high, gas_range_h)
-            else:
-                self.data.gas_resistance = self._calc_gas_resistance_low(adc_gas_res_low, gas_range_l)
+            #if self._variant == constants.VARIANT_HIGH:
+            #    self.data.gas_resistance = self._calc_gas_resistance_high(adc_gas_res_high, gas_range_h)
+            #else:
+            #    self.data.gas_resistance = self._calc_gas_resistance_low(adc_gas_res_low, gas_range_l)
 
             return True
 
@@ -328,11 +385,11 @@ class BME680(object):
 
         """
         self.tph_settings.filter = value
-        self._set_bits(constants.CONF_ODR_FILT_ADDR, constants.FILTER_MSK, constants.FILTER_POS, value)
+        self._set_bits(self.CONF_ODR_FILT_ADDR, self.FILTER_MSK, self.FILTER_POS, value)
 
     def get_filter(self):
         """Get filter size."""
-        return (self._get_regs(constants.CONF_ODR_FILT_ADDR, 1) & constants.FILTER_MSK) >> constants.FILTER_POS
+        return (self._get_regs(self.CONF_ODR_FILT_ADDR, 1) & self.FILTER_MSK) >> self.FILTER_POS
 
     
     def set_pressure_oversample(self, value):
@@ -348,11 +405,11 @@ class BME680(object):
 
         """
         self.tph_settings.os_pres = value
-        self._set_bits(constants.CONF_T_P_MODE_ADDR, constants.OSP_MSK, constants.OSP_POS, value)
+        self._set_bits(self.CONF_T_P_MODE_ADDR, self.OSP_MSK, self.OSP_POS, value)
 
     def get_pressure_oversample(self):
         """Get pressure oversampling."""
-        return (self._get_regs(constants.CONF_T_P_MODE_ADDR, 1) & constants.OSP_MSK) >> constants.OSP_POS
+        return (self._get_regs(self.CONF_T_P_MODE_ADDR, 1) & self.OSP_MSK) >> self.OSP_POS
 
     def _calc_pressure(self, pressure_adc):
         """Convert the raw pressure using calibration data."""
