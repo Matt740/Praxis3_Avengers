@@ -227,6 +227,12 @@ BME680_I2C_ADDRESS = 0x76
 #Accelerometer
 class BME680(object):
 
+    SLEEP_MODE = 0
+    FORCED_MODE = 1
+    CONF_T_P_MODE_ADDR = 0x74
+    MODE_MSK = 0x03
+    MODE_POS = 0
+
     def __init__(self, bus=None, network=None, addr=BME680_I2C_ADDRESS):
         #Attach sensor to I2C connection
         if network == None:
@@ -234,6 +240,154 @@ class BME680(object):
         else:
             self.i2c = network
         self.addr = addr
+    
+    def set_power_mode(self, value, blocking=True):
+        """Set power mode."""
+        if value not in (self.SLEEP_MODE, self.FORCED_MODE):
+            raise ValueError('Power mode should be one of SLEEP_MODE or FORCED_MODE')
+
+        self.power_mode = value
+
+        self._set_bits(self.CONF_T_P_MODE_ADDR, self.MODE_MSK, self.MODE_POS, value)
+
+        while blocking and self.get_power_mode() != self.power_mode:
+            time.sleep(constants.POLL_PERIOD_MS / 1000.0)
+
+    def get_power_mode(self):
+        """Get power mode."""
+        self.power_mode = self._get_regs(constants.CONF_T_P_MODE_ADDR, 1)
+        return self.power_mode
+
+    def get_sensor_data(self):
+        """Get sensor data.
+
+        Stores data in .data and returns True upon success.
+
+        """
+        self.set_power_mode(constants.FORCED_MODE)
+
+        for attempt in range(10):
+            status = self._get_regs(constants.FIELD0_ADDR, 1)
+
+            if (status & constants.NEW_DATA_MSK) == 0:
+                time.sleep(constants.POLL_PERIOD_MS / 1000.0)
+                continue
+
+            regs = self._get_regs(constants.FIELD0_ADDR, constants.FIELD_LENGTH)
+
+            self.data.status = regs[0] & constants.NEW_DATA_MSK
+            # Contains the nb_profile used to obtain the current measurement
+            self.data.gas_index = regs[0] & constants.GAS_INDEX_MSK
+            self.data.meas_index = regs[1]
+
+            adc_pres = (regs[2] << 12) | (regs[3] << 4) | (regs[4] >> 4)
+            adc_temp = (regs[5] << 12) | (regs[6] << 4) | (regs[7] >> 4)
+            adc_hum = (regs[8] << 8) | regs[9]
+            adc_gas_res_low = (regs[13] << 2) | (regs[14] >> 6)
+            adc_gas_res_high = (regs[15] << 2) | (regs[16] >> 6)
+            gas_range_l = regs[14] & constants.GAS_RANGE_MSK
+            gas_range_h = regs[16] & constants.GAS_RANGE_MSK
+
+            if self._variant == constants.VARIANT_HIGH:
+                self.data.status |= regs[16] & constants.GASM_VALID_MSK
+                self.data.status |= regs[16] & constants.HEAT_STAB_MSK
+            else:
+                self.data.status |= regs[14] & constants.GASM_VALID_MSK
+                self.data.status |= regs[14] & constants.HEAT_STAB_MSK
+
+            self.data.heat_stable = (self.data.status & constants.HEAT_STAB_MSK) > 0
+
+            temperature = self._calc_temperature(adc_temp)
+            self.data.temperature = temperature / 100.0
+            self.ambient_temperature = temperature  # Saved for heater calc
+
+            self.data.pressure = self._calc_pressure(adc_pres) / 100.0
+            self.data.humidity = self._calc_humidity(adc_hum) / 1000.0
+
+            if self._variant == constants.VARIANT_HIGH:
+                self.data.gas_resistance = self._calc_gas_resistance_high(adc_gas_res_high, gas_range_h)
+            else:
+                self.data.gas_resistance = self._calc_gas_resistance_low(adc_gas_res_low, gas_range_l)
+
+            return True
+
+        return False
+    
+    def set_filter(self, value):
+        """Set IIR filter size.
+
+        Optionally remove short term fluctuations from the temperature and pressure readings,
+        increasing their resolution but reducing their bandwidth.
+
+        Enabling the IIR filter does not slow down the time a reading takes, but will slow
+        down the BME680s response to changes in temperature and pressure.
+
+        When the IIR filter is enabled, the temperature and pressure resolution is effectively 20bit.
+        When it is disabled, it is 16bit + oversampling-1 bits.
+
+        """
+        self.tph_settings.filter = value
+        self._set_bits(constants.CONF_ODR_FILT_ADDR, constants.FILTER_MSK, constants.FILTER_POS, value)
+
+    def get_filter(self):
+        """Get filter size."""
+        return (self._get_regs(constants.CONF_ODR_FILT_ADDR, 1) & constants.FILTER_MSK) >> constants.FILTER_POS
+
+    
+    def set_pressure_oversample(self, value):
+        """Set temperature oversampling.
+
+        A higher oversampling value means more stable sensor readings,
+        with less noise and jitter.
+
+        However each step of oversampling adds about 2ms to the latency,
+        causing a slower response time to fast transients.
+
+        :param value: Oversampling value, one of: OS_NONE, OS_1X, OS_2X, OS_4X, OS_8X, OS_16X
+
+        """
+        self.tph_settings.os_pres = value
+        self._set_bits(constants.CONF_T_P_MODE_ADDR, constants.OSP_MSK, constants.OSP_POS, value)
+
+    def get_pressure_oversample(self):
+        """Get pressure oversampling."""
+        return (self._get_regs(constants.CONF_T_P_MODE_ADDR, 1) & constants.OSP_MSK) >> constants.OSP_POS
+
+    def _calc_pressure(self, pressure_adc):
+        """Convert the raw pressure using calibration data."""
+        var1 = ((self.calibration_data.t_fine) >> 1) - 64000
+        var2 = ((((var1 >> 2) * (var1 >> 2)) >> 11) *
+                self.calibration_data.par_p6) >> 2
+        var2 = var2 + ((var1 * self.calibration_data.par_p5) << 1)
+        var2 = (var2 >> 2) + (self.calibration_data.par_p4 << 16)
+        var1 = (((((var1 >> 2) * (var1 >> 2)) >> 13) *
+                ((self.calibration_data.par_p3 << 5)) >> 3) +
+                ((self.calibration_data.par_p2 * var1) >> 1))
+        var1 = var1 >> 18
+
+        var1 = ((32768 + var1) * self.calibration_data.par_p1) >> 15
+        calc_pressure = 1048576 - pressure_adc
+        calc_pressure = ((calc_pressure - (var2 >> 12)) * (3125))
+
+        if calc_pressure >= (1 << 31):
+            calc_pressure = ((calc_pressure // var1) << 1)
+        else:
+            calc_pressure = ((calc_pressure << 1) // var1)
+
+        var1 = (self.calibration_data.par_p9 * (((calc_pressure >> 3) *
+                (calc_pressure >> 3)) >> 13)) >> 12
+        var2 = ((calc_pressure >> 2) *
+                self.calibration_data.par_p8) >> 13
+        var3 = ((calc_pressure >> 8) * (calc_pressure >> 8) *
+                (calc_pressure >> 8) *
+                self.calibration_data.par_p10) >> 17
+
+        calc_pressure = (calc_pressure) + ((var1 + var2 + var3 +
+                                           (self.calibration_data.par_p7 << 7)) >> 4)
+
+        return calc_pressure
+
+
     
 
 
