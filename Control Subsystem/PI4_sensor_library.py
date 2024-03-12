@@ -1,4 +1,5 @@
 import smbus2
+import time
 import serial
 import RPi.GPIO as GPIO
 
@@ -259,6 +260,7 @@ class BME680(object):
 ##############################################################################################################################################
 
 UART_PIN = '/dev/ttyS0'
+Temp = '0123456789ABCDEF*'
 
 class L76B(object):
 
@@ -284,4 +286,39 @@ class L76B(object):
         GPIO.setup(ForcePin, GPIO.OUT)
         GPIO.output(StandByPin, GPIO.LOW)
         GPIO.output(ForcePin, GPIO.LOW)
+
+    def l76x_send_command(self, data): 
+        Check = ord(data[1]) 
+        for i in range(2, len(data)):
+            Check = Check ^ ord(data[i]) 
+        data = data + Temp[16]
+        data = data + Temp[int(Check/16)]
+        data = data + Temp[int(Check%16)]
+        self.uart_send_string(data.encode())
+        self.uart_send_byte('\r'.encode())
+        self.uart_send_byte('\n'.encode())
+        print (data)   
+
+    def l76x_exit_backup_mode(self): #NEED
+        self.Force.value(1)
+        time.sleep(1)
+        self.Force.value(0)
+        time.sleep(1)
+        self.Force = Pin(self.FORCE_PIN,Pin.IN)
+        
+    def uart_send_byte(self, value): # Nre wrtie
+        self.ser.write(value) 
+
+    def uart_send_string(self, value): # rewrite 
+        self.ser.write(value)
+
+    def uart_receive_byte(self): # rewrite
+        return self.ser.read(1)
+
+    def uart_receiveString(self, value): # rewrite
+        data = self.ser.read(value)
+        return data
+    
+    def uart_any(self): # rewrite
+        return self.ser.any() 
 
