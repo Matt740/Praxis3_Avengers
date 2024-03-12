@@ -47,6 +47,20 @@ class I2CUnifiedMachine(I2CBase):
 
     def write_byte_block(self, i2c_addr, reg, data=0x00, force=None):
         return self.i2c.write_i2c_block_data(i2c_addr, reg, data, force)
+    
+    def _get_regs(self, register, length):
+        """Get one or more registers."""
+        if length == 1:
+            return self.i2c.read_byte(self.i2c_addr, register)
+        else:
+            return self.i2c.read_byte_block(self.i2c_addr, register, length)
+        
+    def _set_regs(self, register, value):
+        """Set one or more registers."""
+        if isinstance(value, int):
+            self.i2c.write_byte_(self.i2c_addr, register, value)
+        else:
+            self.i2c.write_byte_block(self.i2c_addr, register, value)
 
 # Overall function to create 12C object and returns the object 
 def create_unified_i2c(bus=0):
@@ -280,6 +294,8 @@ class BME680(object):
         self.set_temp_offset(0)
         self.get_sensor_data()
     
+    
+
     def set_power_mode(self, value, blocking=True):
         """Set power mode."""
         if value not in (self.SLEEP_MODE, self.FORCED_MODE):
@@ -287,24 +303,24 @@ class BME680(object):
 
         self.power_mode = value
 
-        self._set_bits(self.CONF_T_P_MODE_ADDR, self.MODE_MSK, self.MODE_POS, value)
+        self.i2c._get_regs(self.CONF_T_P_MODE_ADDR, self.MODE_MSK, self.MODE_POS, value)
 
         while blocking and self.get_power_mode() != self.power_mode:
             time.sleep(self.POLL_PERIOD_MS / 1000.0)
 
     def get_power_mode(self):
         """Get power mode."""
-        self.power_mode = self._get_regs(self.CONF_T_P_MODE_ADDR, 1)
+        self.power_mode = self.i2c._get_regs(self.CONF_T_P_MODE_ADDR, 1)
         return self.power_mode
 
     def _get_calibration_data(self):
         """Retrieve the sensor calibration data and store it in .calibration_data."""
-        calibration = self._get_regs(self.COEFF_ADDR1, self.COEFF_ADDR1_LEN)
-        calibration += self._get_regs(self.COEFF_ADDR2, self.COEFF_ADDR2_LEN)
+        calibration = self.i2c._get_regs(self.COEFF_ADDR1, self.COEFF_ADDR1_LEN)
+        calibration += self.i2c._get_regs(self.COEFF_ADDR2, self.COEFF_ADDR2_LEN)
 
-        heat_range = self._get_regs(self.ADDR_RES_HEAT_RANGE_ADDR, 1)
-        heat_value = self.twos_comp(self._get_regs(self.ADDR_RES_HEAT_VAL_ADDR, 1), bits=8)
-        sw_error = self.twos_comp(self._get_regs(self.ADDR_RANGE_SW_ERR_ADDR, 1), bits=8)
+        heat_range = self.i2c._get_regs(self.ADDR_RES_HEAT_RANGE_ADDR, 1)
+        heat_value = self.twos_comp(self.i2c._get_regs(self.ADDR_RES_HEAT_VAL_ADDR, 1), bits=8)
+        sw_error = self.twos_comp(self.i2c._get_regs(self.ADDR_RANGE_SW_ERR_ADDR, 1), bits=8)
 
         self.calibration_data.set_from_array(calibration)
         self.calibration_data.set_other(heat_range, heat_value, sw_error)
@@ -325,13 +341,13 @@ class BME680(object):
         self.set_power_mode(self.FORCED_MODE)
 
         for attempt in range(10):
-            status = self._get_regs(self.FIELD0_ADDR, 1)
+            status = self.i2c._get_regs(self.FIELD0_ADDR, 1)
 
             if (status & self.NEW_DATA_MSK) == 0:
                 time.sleep(self.POLL_PERIOD_MS / 1000.0)
                 continue
 
-            regs = self._get_regs(self.FIELD0_ADDR, self.FIELD_LENGTH)
+            regs = self.i2c._get_regs(self.FIELD0_ADDR, self.FIELD_LENGTH)
 
             self.data.status = regs[0] & self.NEW_DATA_MSK
             # Contains the nb_profile used to obtain the current measurement
@@ -389,7 +405,7 @@ class BME680(object):
 
     def get_filter(self):
         """Get filter size."""
-        return (self._get_regs(self.CONF_ODR_FILT_ADDR, 1) & self.FILTER_MSK) >> self.FILTER_POS
+        return (self.i2c._get_regs(self.CONF_ODR_FILT_ADDR, 1) & self.FILTER_MSK) >> self.FILTER_POS
 
     
     def set_pressure_oversample(self, value):
@@ -405,11 +421,11 @@ class BME680(object):
 
         """
         self.tph_settings.os_pres = value
-        self._set_bits(self.CONF_T_P_MODE_ADDR, self.OSP_MSK, self.OSP_POS, value)
+        self.i2c._set_bits(self.CONF_T_P_MODE_ADDR, self.OSP_MSK, self.OSP_POS, value)
 
     def get_pressure_oversample(self):
         """Get pressure oversampling."""
-        return (self._get_regs(self.CONF_T_P_MODE_ADDR, 1) & self.OSP_MSK) >> self.OSP_POS
+        return (self.i2c._get_regs(self.CONF_T_P_MODE_ADDR, 1) & self.OSP_MSK) >> self.OSP_POS
 
     def _calc_pressure(self, pressure_adc):
         """Convert the raw pressure using calibration data."""
