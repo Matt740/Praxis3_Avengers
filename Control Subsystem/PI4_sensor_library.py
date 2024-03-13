@@ -1,7 +1,9 @@
 import smbus2
 import time
+import math
 import serial
-import RPi.GPIO as GPIO
+import gpiozero as GPIO  #import RPi.GPIO as GPIO
+
 #BME680 imports
 from .BME680_constants import lookupTable1, lookupTable2
 from .BME680_constants import BME680Data
@@ -723,6 +725,9 @@ class BME680(BME680Data):
 
 UART_PIN = '/dev/ttyS0'
 Temp = '0123456789ABCDEF*'
+a = 6378245.0
+ee = 0.00669342162296594323
+x_pi = math.pi * 3000.0 / 180.0
 
 class L76B(object):
 
@@ -732,9 +737,12 @@ class L76B(object):
     SET_NMEA_BAUDRATE_57600    = 57600
     SET_NMEA_BAUDRATE_38400    = 38400
     SET_NMEA_BAUDRATE_19200    = 19200
-    SET_NMEA_BAUDRATE_14400    = 14400
     SET_NMEA_BAUDRATE_9600     = 9600
     SET_NMEA_BAUDRATE_4800     = 4800
+
+    #Switching time output
+    SET_SYNC_PPS_NMEA_OFF   = '$PMTK255,0'
+    SET_SYNC_PPS_NMEA_ON    = '$PMTK255,1'
 
     def __init__(self, StandByPin, ForcePin):
         self.ser = serial.Serial(port=UART_PIN, 
@@ -743,11 +751,8 @@ class L76B(object):
                                  stopbits=serial.STOPBITS_ONE,
                                  bytesize=serial.EIGHTBITS,
                                  timeout=1000)
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(StandByPin, GPIO.OUT)
-        GPIO.setup(ForcePin, GPIO.OUT)
-        GPIO.output(StandByPin, GPIO.LOW)
-        GPIO.output(ForcePin, GPIO.LOW)
+        self.Force = GPIO.OutputDevice(StandByPin, active_high=True, initial_value=False)
+        self.Standby = GPIO.OutputDevice(ForcePin, active_high=True, initial_value=False)
 
     def l76x_send_command(self, data): 
         Check = ord(data[1]) 
@@ -759,28 +764,109 @@ class L76B(object):
         self.uart_send_string(data.encode())
         self.uart_send_byte('\r'.encode())
         self.uart_send_byte('\n'.encode())
-        print (data)   
+        print(data)   
 
-    def l76x_exit_backup_mode(self): #NEED
-        self.Force.value(1)
+    def l76x_exit_backup_mode(self):
+        self.Force.on()
         time.sleep(1)
-        self.Force.value(0)
+        self.Force.off()
         time.sleep(1)
-        self.Force = Pin(self.FORCE_PIN,Pin.IN)
-        
-    def uart_send_byte(self, value): # Nre wrtie
+
+    def gcj02_to_bd09(self,lng, lat):
+        z = math.sqrt(lng * lng + lat * lat) + 0.00002 * math.sin(lat * x_pi)
+        theta = math.atan2(lat, lng) + 0.000003 * math.cos(lng * x_pi)
+        bd_lng = z * math.cos(theta) + 0.0065
+        bd_lat = z * math.sin(theta) + 0.006
+        return [bd_lng, bd_lat]
+
+    def bd09_to_gcj02(self,bd_lon, bd_lat):
+        x = bd_lon - 0.0065
+        y = bd_lat - 0.006
+        z = math.sqrt(x * x + y * y) - 0.00002 * math.sin(y * x_pi)
+        theta = math.atan2(y, x) - 0.000003 * math.cos(x * x_pi)
+        gg_lng = z * math.cos(theta)
+        gg_lat = z * math.sin(theta)
+        return [gg_lng, gg_lat]
+
+    def wgs84_to_gcj02(self,lng, lat):
+        if self.out_of_china(lng, lat): 
+            return [lng, lat]
+        dlat = self._transformlat(lng - 105.0, lat - 35.0)
+        dlng = self._transformlng(lng - 105.0, lat - 35.0)
+        radlat = lat / 180.0 * math.pi
+        magic = math.sin(radlat)
+        magic = 1 - ee * magic * magic
+        sqrtmagic = math.sqrt(magic)
+        dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * math.pi)
+        dlng = (dlng * 180.0) / (a / sqrtmagic * math.cos(radlat) * math.pi)
+        mglat = lat + dlat
+        mglng = lng + dlng
+        return [mglng, mglat]
+
+
+    def gcj02_to_wgs84(self,lng, lat):
+        if self.out_of_china(lng, lat):
+            return [lng, lat]
+        dlat = self._transformlat(lng - 105.0, lat - 35.0)
+        dlng = self._transformlng(lng - 105.0, lat - 35.0)
+        radlat = lat / 180.0 * math.pi
+        magic = math.sin(radlat)
+        magic = 1 - ee * magic * magic
+        sqrtmagic = math.sqrt(magic)
+        dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * math.pi)
+        dlng = (dlng * 180.0) / (a / sqrtmagic * math.cos(radlat) * math.pi)
+        mglat = lat + dlat
+        mglng = lng + dlng
+        return [lng * 2 - mglng, lat * 2 - mglat]
+
+    def bd09_to_wgs84(self,bd_lon, bd_lat):
+        lon, lat = self.bd09_to_gcj02(bd_lon, bd_lat)
+        return self.gcj02_to_wgs84(lon, lat)
+
+    def wgs84_to_bd09(self,lon, lat):
+        lon, lat = self.wgs84_to_gcj02(lon, lat)
+#         return gcj02_to_bd09(lon, lat)
+        self.Lon_Baidu,self.Lat_Baidu = self.gcj02_to_bd09(lon, lat)
+    
+    def out_of_china(self,lng, lat):
+        return not (lng > 73.66 and lng < 135.05 and lat > 3.86 and lat < 53.55)
+
+    def _transformlat(self,lng, lat):
+        ret = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + \
+            0.1 * lng * lat + 0.2 * math.sqrt(math.fabs(lng))
+        ret += (20.0 * math.sin(6.0 * lng * math.pi) + 20.0 *
+                math.sin(2.0 * lng * math.pi)) * 2.0 / 3.0
+        ret += (20.0 * math.sin(lat * math.pi) + 40.0 *
+                math.sin(lat / 3.0 * math.pi)) * 2.0 / 3.0
+        ret += (160.0 * math.sin(lat / 12.0 * math.pi) + 320 *
+                math.sin(lat * math.pi / 30.0)) * 2.0 / 3.0
+        return ret
+
+
+    def _transformlng(self,lng, lat):
+        ret = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + \
+            0.1 * lng * lat + 0.1 * math.sqrt(math.fabs(lng))
+        ret += (20.0 * math.sin(6.0 * lng * math.pi) + 20.0 *
+                math.sin(2.0 * lng * math.pi)) * 2.0 / 3.0
+        ret += (20.0 * math.sin(lng * math.pi) + 40.0 *
+                math.sin(lng / 3.0 * math.pi)) * 2.0 / 3.0
+        ret += (150.0 * math.sin(lng / 12.0 * math.pi) + 300.0 *
+                math.sin(lng / 30.0 * math.pi)) * 2.0 / 3.0
+        return ret
+
+    def l76x_set_baudrate(self, _baudrate):
+        self.ser.baudrate = _baudrate
+
+    def uart_send_byte(self, value):
         self.ser.write(value) 
 
-    def uart_send_string(self, value): # rewrite 
+    def uart_send_string(self, value): 
         self.ser.write(value)
 
-    def uart_receive_byte(self): # rewrite
+    def uart_receive_byte(self): 
         return self.ser.read(1)
 
-    def uart_receiveString(self, value): # rewrite
+    def uart_receiveString(self, value): 
         data = self.ser.read(value)
         return data
     
-    def uart_any(self): # rewrite
-        return self.ser.any() 
-
