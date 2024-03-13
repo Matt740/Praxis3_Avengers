@@ -49,19 +49,19 @@ class I2CUnifiedMachine(I2CBase):
     def write_byte_block(self, i2c_addr, reg, data=0x00, force=None):
         return self.i2c.write_i2c_block_data(i2c_addr, reg, data, force)
     
-    def _get_regs(self, register, length):
+    def _get_regs(self, i2c_addr, register, length):
         """Get one or more registers."""
         if length == 1:
-            return self.i2c.read_byte(self.i2c_addr, register)
+            return self.read_byte(i2c_addr, register)
         else:
-            return self.i2c.read_byte_block(self.i2c_addr, register, length)
+            return self.read_byte_block(i2c_addr, register, length)
         
-    def _set_regs(self, register, value):
+    def _set_regs(self, i2c_addr, register, value):
         """Set one or more registers."""
         if isinstance(value, int):
-            self.i2c.write_byte_(self.i2c_addr, register, value)
+            self.write_byte(i2c_addr, register, value)
         else:
-            self.i2c.write_byte_block(self.i2c_addr, register, value)
+            self.write_byte_block(i2c_addr, register, value)
 
 # Overall function to create 12C object and returns the object 
 def create_unified_i2c(bus=0):
