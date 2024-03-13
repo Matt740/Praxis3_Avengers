@@ -2,7 +2,7 @@ import smbus2
 import time
 import math
 import serial
-import gpiozero as GPIO  #import RPi.GPIO as GPIO
+import gpiozero as GPIO 
 
 #BME680 imports
 from .BME680_constants import lookupTable1, lookupTable2
@@ -197,6 +197,20 @@ class QwiicKX13X(object):
         else:
             raise Exception("G range is invalid for sensor please enter 2, 4, 8, or 16")
         self.i2c.write_byte(self.addr, self.KX13X_CNTL1 , reg_val)
+
+    def get_g_range(self):
+        reg_val = self.i2c.read_byte(self.addr, self.KX13X_CNTL1)
+        reg_val &= 0x18
+        reg_val = reg_val >> 3
+
+        if reg_val == 0x00:
+            return 2
+        elif reg_val == 0x01:
+            return 4
+        elif reg_val == 0x02:
+            return 8
+        elif reg_val == 0x03:
+            return 16
 
     def get_raw_accel_values(self):
 
