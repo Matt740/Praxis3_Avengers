@@ -2,6 +2,13 @@ import smbus2
 import time
 import serial
 import RPi.GPIO as GPIO
+#BME680 imports
+from .BME680_constants import lookupTable1, lookupTable2
+from .BME680_constants import BME680Data
+from . import BME680_constants
+import math
+
+
 
 # I2C RELEVANT CLASSES
 ###############################################################################################################
@@ -237,156 +244,153 @@ class QwiicKX13X(object):
 ##############################################################################################################################################
 ##############################################################################################################################################
 
+
+"""BME680 Temperature, Pressure, Humidity & Gas Sensor."""
 BME680_I2C_ADDRESS = 0x76
 
-#Accelerometer
-class BME680(object):
 
-    #Todo
-    #Change constants
-    #Update I2C functions
 
-    SLEEP_MODE = 0
-    FORCED_MODE = 1
-    CONF_T_P_MODE_ADDR = 0x74
-    MODE_MSK = 0x03
-    MODE_POS = 0
-    POLL_PERIOD_MS = 10
-    CONF_T_P_MODE_ADDR = 0x74
-    FIELD0_ADDR = 0x1d
-    NEW_DATA_MSK = 0x80
-    FIELD_LENGTH = 17
-    GAS_INDEX_MSK = 0x0f
-    COEFF_ADDR1 = 0x89
-    COEFF_ADDR2 = 0xe1
-    COEFF_ADDR1_LEN = 25
-    COEFF_ADDR2_LEN = 16
-    ADDR_RES_HEAT_VAL_ADDR = 0x00
-    ADDR_RES_HEAT_RANGE_ADDR = 0x02
-    ADDR_RANGE_SW_ERR_ADDR = 0x04
-    CONF_ODR_FILT_ADDR = 0x75
-    FILTER_MSK = 0X1C
-    FILTER_POS = 2
-    OSP_MSK = 0X1C
-    OSP_POS = 2
+
+__version__ = '1.1.1'
+
+
+# Export constants to global namespace
+# so end-users can "from BME680 import NAME"
+if hasattr(BME680_constants, '__dict__'):
+    for key in BME680_constants.__dict__:
+        value = BME680_constants.__dict__[key]
+        if key not in globals():
+            globals()[key] = value
+
+
+class BME680(BME680Data):
+    """BOSCH BME680.
+
+    Gas, pressure, temperature and humidity sensor.
+
+    :param i2c_addr: One of I2C_ADDR_PRIMARY (0x76) or I2C_ADDR_SECONDARY (0x77)
+    :param i2c_device: Optional smbus or compatible instance for facilitating i2c communications.
+
+    """
 
     def __init__(self, bus=None, network=None, addr=BME680_I2C_ADDRESS):
-        #Attach sensor to I2C connection
+        """Initialise BME680 sensor instance and verify device presence.
+
+        :param i2c_addr: i2c address of BME680
+        :param i2c_device: Optional SMBus-compatible instance for i2c transport
+
+        """
         if network == None:
             self.i2c = create_unified_i2c(bus=bus)
         else:
             self.i2c = network
         self.addr = addr
 
+
+        self._variant = self.i2c._get_regs(self.addr, BME680_constants.CHIP_VARIANT_ADDR, 1)
+
         self.soft_reset()
-        self.set_power_mode(constants.SLEEP_MODE)
+        self.set_power_mode(BME680_constants.SLEEP_MODE)
 
         self._get_calibration_data()
 
-        #self.set_humidity_oversample(constants.OS_2X)
-        self.set_pressure_oversample(constants.OS_4X)
-        #self.set_temperature_oversample(constants.OS_8X)
-        self.set_filter(constants.FILTER_SIZE_3)
-        #if self._variant == constants.VARIANT_HIGH:
-        #    self.set_gas_status(constants.ENABLE_GAS_MEAS_HIGH)
-        #else:
-        #    self.set_gas_status(constants.ENABLE_GAS_MEAS_LOW)
+        self.set_humidity_oversample(BME680_constants.OS_2X)
+        self.set_pressure_oversample(BME680_constants.OS_4X)
+        self.set_temperature_oversample(BME680_constants.OS_8X)
+        self.set_filter(BME680_constants.FILTER_SIZE_3)
+        if self._variant == BME680_constants.VARIANT_HIGH:
+            self.set_gas_status(BME680_constants.ENABLE_GAS_MEAS_HIGH)
+        else:
+            self.set_gas_status(BME680_constants.ENABLE_GAS_MEAS_LOW)
         self.set_temp_offset(0)
         self.get_sensor_data()
-    
-    
-
-    def set_power_mode(self, value, blocking=True):
-        """Set power mode."""
-        if value not in (self.SLEEP_MODE, self.FORCED_MODE):
-            raise ValueError('Power mode should be one of SLEEP_MODE or FORCED_MODE')
-
-        self.power_mode = value
-
-        self.i2c._get_regs(self.CONF_T_P_MODE_ADDR, self.MODE_MSK, self.MODE_POS, value)
-
-        while blocking and self.get_power_mode() != self.power_mode:
-            time.sleep(self.POLL_PERIOD_MS / 1000.0)
-
-    def get_power_mode(self):
-        """Get power mode."""
-        self.power_mode = self.i2c._get_regs(self.CONF_T_P_MODE_ADDR, 1)
-        return self.power_mode
 
     def _get_calibration_data(self):
         """Retrieve the sensor calibration data and store it in .calibration_data."""
-        calibration = self.i2c._get_regs(self.COEFF_ADDR1, self.COEFF_ADDR1_LEN)
-        calibration += self.i2c._get_regs(self.COEFF_ADDR2, self.COEFF_ADDR2_LEN)
+        calibration = self.i2c._get_regs(self.addr, BME680_constants.COEFF_ADDR1, BME680_constants.COEFF_ADDR1_LEN)
+        calibration += self.i2c._get_regs(self.addr, BME680_constants.COEFF_ADDR2, BME680_constants.COEFF_ADDR2_LEN)
 
-        heat_range = self.i2c._get_regs(self.ADDR_RES_HEAT_RANGE_ADDR, 1)
-        heat_value = self.twos_comp(self.i2c._get_regs(self.ADDR_RES_HEAT_VAL_ADDR, 1), bits=8)
-        sw_error = self.twos_comp(self.i2c._get_regs(self.ADDR_RANGE_SW_ERR_ADDR, 1), bits=8)
+        heat_range = self.i2c._get_regs(self.addr, BME680_constants.ADDR_RES_HEAT_RANGE_ADDR, 1)
+        heat_value = BME680_constants.twos_comp(self.addr, self.i2c._get_regs(BME680_constants.ADDR_RES_HEAT_VAL_ADDR, 1), bits=8)
+        sw_error = BME680_constants.twos_comp(self.addr, self.i2c._get_regs(BME680_constants.ADDR_RANGE_SW_ERR_ADDR, 1), bits=8)
 
         self.calibration_data.set_from_array(calibration)
         self.calibration_data.set_other(heat_range, heat_value, sw_error)
 
-    def twos_comp(val, bits=16):
-        """Convert two bytes into a two's compliment signed word."""
-        # TODO: Reimpliment with struct
-        if val & (1 << (bits - 1)) != 0:
-            val = val - (1 << bits)
-        return val
+    def soft_reset(self):
+        """Trigger a soft reset."""
+        self.i2c._set_regs(self.addr, BME680_constants.SOFT_RESET_ADDR, BME680_constants.SOFT_RESET_CMD)
+        time.sleep(BME680_constants.RESET_PERIOD / 1000.0)
 
-    def get_sensor_data(self):
-        """Get sensor data.
+    def set_temp_offset(self, value):
+        """Set temperature offset in celsius.
 
-        Stores data in .data and returns True upon success.
+        If set, the temperature t_fine will be increased by given value in celsius.
+        :param value: Temperature offset in Celsius, eg. 4, -8, 1.25
 
         """
-        self.set_power_mode(self.FORCED_MODE)
+        if value == 0:
+            self.offset_temp_in_t_fine = 0
+        else:
+            self.offset_temp_in_t_fine = int(math.copysign((((int(abs(value) * 100)) << 8) - 128) / 5, value))
 
-        for attempt in range(10):
-            status = self.i2c._get_regs(self.FIELD0_ADDR, 1)
+    def set_humidity_oversample(self, value):
+        """Set humidity oversampling.
 
-            if (status & self.NEW_DATA_MSK) == 0:
-                time.sleep(self.POLL_PERIOD_MS / 1000.0)
-                continue
+        A higher oversampling value means more stable sensor readings,
+        with less noise and jitter.
 
-            regs = self.i2c._get_regs(self.FIELD0_ADDR, self.FIELD_LENGTH)
+        However each step of oversampling adds about 2ms to the latency,
+        causing a slower response time to fast transients.
 
-            self.data.status = regs[0] & self.NEW_DATA_MSK
-            # Contains the nb_profile used to obtain the current measurement
-            #self.data.gas_index = regs[0] & self.GAS_INDEX_MSK
-            self.data.meas_index = regs[1]
+        :param value: Oversampling value, one of: OS_NONE, OS_1X, OS_2X, OS_4X, OS_8X, OS_16X
 
-            adc_pres = (regs[2] << 12) | (regs[3] << 4) | (regs[4] >> 4)
-            #adc_temp = (regs[5] << 12) | (regs[6] << 4) | (regs[7] >> 4)
-            #adc_hum = (regs[8] << 8) | regs[9]
-            #adc_gas_res_low = (regs[13] << 2) | (regs[14] >> 6)
-            #adc_gas_res_high = (regs[15] << 2) | (regs[16] >> 6)
-            #gas_range_l = regs[14] & constants.GAS_RANGE_MSK
-            #gas_range_h = regs[16] & constants.GAS_RANGE_MSK
+        """
+        self.tph_settings.os_hum = value
+        self._set_bits(BME680_constants.CONF_OS_H_ADDR, BME680_constants.OSH_MSK, BME680_constants.OSH_POS, value)
 
-           # if self._variant == constants.VARIANT_HIGH:
-            #    self.data.status |= regs[16] & constants.GASM_VALID_MSK
-            #    self.data.status |= regs[16] & constants.HEAT_STAB_MSK
-            #else:
-            #    self.data.status |= regs[14] & constants.GASM_VALID_MSK
-            #    self.data.status |= regs[14] & constants.HEAT_STAB_MSK
+    def get_humidity_oversample(self):
+        """Get humidity oversampling."""
+        return (self.i2c._get_regs(self.addr, BME680_constants.CONF_OS_H_ADDR, 1) & BME680_constants.OSH_MSK) >> BME680_constants.OSH_POS
 
-            #self.data.heat_stable = (self.data.status & constants.HEAT_STAB_MSK) > 0
+    def set_pressure_oversample(self, value):
+        """Set temperature oversampling.
 
-            #temperature = self._calc_temperature(adc_temp)
-            #self.data.temperature = temperature / 100.0
-            #self.ambient_temperature = temperature  # Saved for heater calc
+        A higher oversampling value means more stable sensor readings,
+        with less noise and jitter.
 
-            self.data.pressure = self._calc_pressure(adc_pres) / 100.0
-            #self.data.humidity = self._calc_humidity(adc_hum) / 1000.0
+        However each step of oversampling adds about 2ms to the latency,
+        causing a slower response time to fast transients.
 
-            #if self._variant == constants.VARIANT_HIGH:
-            #    self.data.gas_resistance = self._calc_gas_resistance_high(adc_gas_res_high, gas_range_h)
-            #else:
-            #    self.data.gas_resistance = self._calc_gas_resistance_low(adc_gas_res_low, gas_range_l)
+        :param value: Oversampling value, one of: OS_NONE, OS_1X, OS_2X, OS_4X, OS_8X, OS_16X
 
-            return True
+        """
+        self.tph_settings.os_pres = value
+        self._set_bits(BME680_constants.CONF_T_P_MODE_ADDR, BME680_constants.OSP_MSK, BME680_constants.OSP_POS, value)
 
-        return False
-    
+    def get_pressure_oversample(self):
+        """Get pressure oversampling."""
+        return (self.i2c._get_regs(self.addr, BME680_constants.CONF_T_P_MODE_ADDR, 1) & BME680_constants.OSP_MSK) >> BME680_constants.OSP_POS
+
+    def set_temperature_oversample(self, value):
+        """Set pressure oversampling.
+
+        A higher oversampling value means more stable sensor readings,
+        with less noise and jitter.
+
+        However each step of oversampling adds about 2ms to the latency,
+        causing a slower response time to fast transients.
+
+        :param value: Oversampling value, one of: OS_NONE, OS_1X, OS_2X, OS_4X, OS_8X, OS_16X
+
+        """
+        self.tph_settings.os_temp = value
+        self._set_bits(BME680_constants.CONF_T_P_MODE_ADDR, BME680_constants.OST_MSK, BME680_constants.OST_POS, value)
+
+    def get_temperature_oversample(self):
+        """Get temperature oversampling."""
+        return (self.i2c._get_regs(self.addr, BME680_constants.CONF_T_P_MODE_ADDR, 1) & BME680_constants.OST_MSK) >> BME680_constants.OST_POS
+
     def set_filter(self, value):
         """Set IIR filter size.
 
@@ -401,31 +405,184 @@ class BME680(object):
 
         """
         self.tph_settings.filter = value
-        self._set_bits(self.CONF_ODR_FILT_ADDR, self.FILTER_MSK, self.FILTER_POS, value)
+        self._set_bits(BME680_constants.CONF_ODR_FILT_ADDR, BME680_constants.FILTER_MSK, BME680_constants.FILTER_POS, value)
 
     def get_filter(self):
         """Get filter size."""
-        return (self.i2c._get_regs(self.CONF_ODR_FILT_ADDR, 1) & self.FILTER_MSK) >> self.FILTER_POS
+        return (self.i2c._get_regs(self.addr, BME680_constants.CONF_ODR_FILT_ADDR, 1) & BME680_constants.FILTER_MSK) >> BME680_constants.FILTER_POS
 
-    
-    def set_pressure_oversample(self, value):
-        """Set temperature oversampling.
+    def select_gas_heater_profile(self, value):
+        """Set current gas sensor conversion profile.
 
-        A higher oversampling value means more stable sensor readings,
-        with less noise and jitter.
+        Select one of the 10 configured heating durations/set points.
 
-        However each step of oversampling adds about 2ms to the latency,
-        causing a slower response time to fast transients.
-
-        :param value: Oversampling value, one of: OS_NONE, OS_1X, OS_2X, OS_4X, OS_8X, OS_16X
+        :param value: Profile index from 0 to 9
 
         """
-        self.tph_settings.os_pres = value
-        self.i2c._set_bits(self.CONF_T_P_MODE_ADDR, self.OSP_MSK, self.OSP_POS, value)
+        if value > BME680_constants.NBCONV_MAX or value < BME680_constants.NBCONV_MIN:
+            raise ValueError("Profile '{}' should be between {} and {}".format(value, BME680_constants.NBCONV_MIN, BME680_constants.NBCONV_MAX))
 
-    def get_pressure_oversample(self):
-        """Get pressure oversampling."""
-        return (self.i2c._get_regs(self.CONF_T_P_MODE_ADDR, 1) & self.OSP_MSK) >> self.OSP_POS
+        self.gas_settings.nb_conv = value
+        self._set_bits(BME680_constants.CONF_ODR_RUN_GAS_NBC_ADDR, BME680_constants.NBCONV_MSK, BME680_constants.NBCONV_POS, value)
+
+    def get_gas_heater_profile(self):
+        """Get gas sensor conversion profile: 0 to 9."""
+        return self.i2c._get_regs(self.addr, BME680_constants.CONF_ODR_RUN_GAS_NBC_ADDR, 1) & BME680_constants.NBCONV_MSK
+
+    def set_gas_heater_status(self, value):
+        """Enable/disable gas heater."""
+        self.gas_settings.heater = value
+        self._set_bits(BME680_constants.CONF_HEAT_CTRL_ADDR, BME680_constants.HCTRL_MSK, BME680_constants.HCTRL_POS, value)
+
+    def get_gas_heater_status(self):
+        """Get current heater status."""
+        return (self.i2c._get_regs(self.addr, BME680_constants.CONF_HEAT_CTRL_ADDR, 1) & BME680_constants.HCTRL_MSK) >> BME680_constants.HCTRL_POS
+
+    def set_gas_status(self, value):
+        """Enable/disable gas sensor."""
+        if value == -1:
+            if self._variant == BME680_constants.VARIANT_HIGH:
+                value = BME680_constants.ENABLE_GAS_MEAS_HIGH
+            else:
+                value = BME680_constants.ENABLE_GAS_MEAS_LOW
+        self.gas_settings.run_gas = value
+        self._set_bits(BME680_constants.CONF_ODR_RUN_GAS_NBC_ADDR, BME680_constants.RUN_GAS_MSK, BME680_constants.RUN_GAS_POS, value)
+
+    def get_gas_status(self):
+        """Get the current gas status."""
+        return (self.i2c._get_regs(self.addr, BME680_constants.CONF_ODR_RUN_GAS_NBC_ADDR, 1) & BME680_constants.RUN_GAS_MSK) >> BME680_constants.RUN_GAS_POS
+
+    def set_gas_heater_profile(self, temperature, duration, nb_profile=0):
+        """Set temperature and duration of gas sensor heater.
+
+        :param temperature: Target temperature in degrees celsius, between 200 and 400
+        :param durarion: Target duration in milliseconds, between 1 and 4032
+        :param nb_profile: Target profile, between 0 and 9
+
+        """
+        self.set_gas_heater_temperature(temperature, nb_profile=nb_profile)
+        self.set_gas_heater_duration(duration, nb_profile=nb_profile)
+
+    def set_gas_heater_temperature(self, value, nb_profile=0):
+        """Set gas sensor heater temperature.
+
+        :param value: Target temperature in degrees celsius, between 200 and 400
+
+        When setting an nb_profile other than 0,
+        make sure to select it with select_gas_heater_profile.
+
+        """
+        if nb_profile > BME680_constants.NBCONV_MAX or value < BME680_constants.NBCONV_MIN:
+            raise ValueError('Profile "{}" should be between {} and {}'.format(nb_profile, BME680_constants.NBCONV_MIN, BME680_constants.NBCONV_MAX))
+
+        self.gas_settings.heatr_temp = value
+        temp = int(self._calc_heater_resistance(self.gas_settings.heatr_temp))
+        self.i2c._set_regs(self.addr, BME680_constants.RES_HEAT0_ADDR + nb_profile, temp)
+
+    def set_gas_heater_duration(self, value, nb_profile=0):
+        """Set gas sensor heater duration.
+
+        Heating durations between 1 ms and 4032 ms can be configured.
+        Approximately 20-30 ms are necessary for the heater to reach the intended target temperature.
+
+        :param value: Heating duration in milliseconds.
+
+        When setting an nb_profile other than 0,
+        make sure to select it with select_gas_heater_profile.
+
+        """
+        if nb_profile > BME680_constants.NBCONV_MAX or value < BME680_constants.NBCONV_MIN:
+            raise ValueError('Profile "{}" should be between {} and {}'.format(nb_profile, BME680_constants.NBCONV_MIN, BME680_constants.NBCONV_MAX))
+
+        self.gas_settings.heatr_dur = value
+        temp = self._calc_heater_duration(self.gas_settings.heatr_dur)
+        self.i2c._set_regs(self.addr, BME680_constants.GAS_WAIT0_ADDR + nb_profile, temp)
+
+    def set_power_mode(self, value, blocking=True):
+        """Set power mode."""
+        if value not in (BME680_constants.SLEEP_MODE, BME680_constants.FORCED_MODE):
+            raise ValueError('Power mode should be one of SLEEP_MODE or FORCED_MODE')
+
+        self.power_mode = value
+
+        self._set_bits(BME680_constants.CONF_T_P_MODE_ADDR, BME680_constants.MODE_MSK, BME680_constants.MODE_POS, value)
+
+        while blocking and self.get_power_mode() != self.power_mode:
+            time.sleep(BME680_constants.POLL_PERIOD_MS / 1000.0)
+
+    def get_power_mode(self):
+        """Get power mode."""
+        self.power_mode = self.i2c._get_regs(self.addr, BME680_constants.CONF_T_P_MODE_ADDR, 1)
+        return self.power_mode
+
+    def get_sensor_data(self):
+        """Get sensor data.
+
+        Stores data in .data and returns True upon success.
+
+        """
+        self.set_power_mode(BME680_constants.FORCED_MODE)
+
+        for attempt in range(10):
+            status = self.i2c._get_regs(self.addr, BME680_constants.FIELD0_ADDR, 1)
+
+            if (status & BME680_constants.NEW_DATA_MSK) == 0:
+                time.sleep(BME680_constants.POLL_PERIOD_MS / 1000.0)
+                continue
+
+            regs = self.i2c._get_regs(self.addr, BME680_constants.FIELD0_ADDR, BME680_constants.FIELD_LENGTH)
+
+            self.data.status = regs[0] & BME680_constants.NEW_DATA_MSK
+            # Contains the nb_profile used to obtain the current measurement
+            self.data.gas_index = regs[0] & BME680_constants.GAS_INDEX_MSK
+            self.data.meas_index = regs[1]
+
+            adc_pres = (regs[2] << 12) | (regs[3] << 4) | (regs[4] >> 4)
+            adc_temp = (regs[5] << 12) | (regs[6] << 4) | (regs[7] >> 4)
+            adc_hum = (regs[8] << 8) | regs[9]
+            adc_gas_res_low = (regs[13] << 2) | (regs[14] >> 6)
+            adc_gas_res_high = (regs[15] << 2) | (regs[16] >> 6)
+            gas_range_l = regs[14] & BME680_constants.GAS_RANGE_MSK
+            gas_range_h = regs[16] & BME680_constants.GAS_RANGE_MSK
+
+            if self._variant == BME680_constants.VARIANT_HIGH:
+                self.data.status |= regs[16] & BME680_constants.GASM_VALID_MSK
+                self.data.status |= regs[16] & BME680_constants.HEAT_STAB_MSK
+            else:
+                self.data.status |= regs[14] & BME680_constants.GASM_VALID_MSK
+                self.data.status |= regs[14] & BME680_constants.HEAT_STAB_MSK
+
+            self.data.heat_stable = (self.data.status & BME680_constants.HEAT_STAB_MSK) > 0
+
+            temperature = self._calc_temperature(adc_temp)
+            self.data.temperature = temperature / 100.0
+            self.ambient_temperature = temperature  # Saved for heater calc
+
+            self.data.pressure = self._calc_pressure(adc_pres) / 100.0
+            self.data.humidity = self._calc_humidity(adc_hum) / 1000.0
+
+            if self._variant == BME680_constants.VARIANT_HIGH:
+                self.data.gas_resistance = self._calc_gas_resistance_high(adc_gas_res_high, gas_range_h)
+            else:
+                self.data.gas_resistance = self._calc_gas_resistance_low(adc_gas_res_low, gas_range_l)
+
+            return True
+
+        return False
+
+
+    def _calc_temperature(self, temperature_adc):
+        """Convert the raw temperature to degrees C using calibration_data."""
+        var1 = (temperature_adc >> 3) - (self.calibration_data.par_t1 << 1)
+        var2 = (var1 * self.calibration_data.par_t2) >> 11
+        var3 = ((var1 >> 1) * (var1 >> 1)) >> 12
+        var3 = ((var3) * (self.calibration_data.par_t3 << 4)) >> 14
+
+        # Save teperature data for pressure calculations
+        self.calibration_data.t_fine = (var2 + var3) + self.offset_temp_in_t_fine
+        calc_temp = (((self.calibration_data.t_fine * 5) + 128) >> 8)
+
+        return calc_temp
 
     def _calc_pressure(self, pressure_adc):
         """Convert the raw pressure using calibration data."""
@@ -461,12 +618,90 @@ class BME680(object):
 
         return calc_pressure
 
+    def _calc_humidity(self, humidity_adc):
+        """Convert the raw humidity using calibration data."""
+        temp_scaled = ((self.calibration_data.t_fine * 5) + 128) >> 8
+        var1 = (humidity_adc - ((self.calibration_data.par_h1 * 16))) -\
+               (((temp_scaled * self.calibration_data.par_h3) // (100)) >> 1)
+        var2 = (self.calibration_data.par_h2 *
+                (((temp_scaled * self.calibration_data.par_h4) // (100)) +
+                 (((temp_scaled * ((temp_scaled * self.calibration_data.par_h5) // (100))) >> 6) //
+                 (100)) + (1 * 16384))) >> 10
+        var3 = var1 * var2
+        var4 = self.calibration_data.par_h6 << 7
+        var4 = ((var4) + ((temp_scaled * self.calibration_data.par_h7) // (100))) >> 4
+        var5 = ((var3 >> 14) * (var3 >> 14)) >> 10
+        var6 = (var4 * var5) >> 1
+        calc_hum = (((var3 + var6) >> 10) * (1000)) >> 12
 
-    
+        return min(max(calc_hum, 0), 100000)
 
+    def _calc_gas_resistance(self, gas_res_adc, gas_range):
+        """Convert the raw gas resistance using calibration data."""
+        if self._variant == BME680_constants.VARIANT_HIGH:
+            return self._calc_gas_resistance_high(gas_res_adc, gas_range)
+        else:
+            return self._calc_gas_resistance_low(gas_res_adc, gas_range)
 
+    def _calc_gas_resistance_high(self, gas_res_adc, gas_range):
+        """Convert the raw gas resistance using calibration data.
 
+        Applies to Variant ID == 0x01 only.
 
+        """
+        var1 = 262144 >> gas_range
+        var2 = gas_res_adc - 512
+
+        var2 *= 3
+        var2 = 4096 + var2
+
+        calc_gas_res = (10000 * var1) / var2
+        calc_gas_res *= 100
+
+        return calc_gas_res
+
+    def _calc_gas_resistance_low(self, gas_res_adc, gas_range):
+        """Convert the raw gas resistance using calibration data.
+
+        Applies to Variant ID == 0x00 only.
+
+        """
+        var1 = ((1340 + (5 * self.calibration_data.range_sw_err)) * (lookupTable1[gas_range])) >> 16
+        var2 = (((gas_res_adc << 15) - (16777216)) + var1)
+        var3 = ((lookupTable2[gas_range] * var1) >> 9)
+        calc_gas_res = ((var3 + (var2 >> 1)) / var2)
+
+        if calc_gas_res < 0:
+            calc_gas_res = (1 << 32) + calc_gas_res
+
+        return calc_gas_res
+
+    def _calc_heater_resistance(self, temperature):
+        """Convert raw heater resistance using calibration data."""
+        temperature = min(max(temperature, 200), 400)
+
+        var1 = ((self.ambient_temperature * self.calibration_data.par_gh3) / 1000) * 256
+        var2 = (self.calibration_data.par_gh1 + 784) * (((((self.calibration_data.par_gh2 + 154009) * temperature * 5) / 100) + 3276800) / 10)
+        var3 = var1 + (var2 / 2)
+        var4 = (var3 / (self.calibration_data.res_heat_range + 4))
+        var5 = (131 * self.calibration_data.res_heat_val) + 65536
+        heatr_res_x100 = (((var4 / var5) - 250) * 34)
+        heatr_res = ((heatr_res_x100 + 50) / 100)
+
+        return heatr_res
+
+    def _calc_heater_duration(self, duration):
+        """Calculate correct value for heater duration setting from milliseconds."""
+        if duration < 0xfc0:
+            factor = 0
+
+            while duration > 0x3f:
+                duration /= 4
+                factor += 1
+
+            return int(duration + (factor * 64))
+
+        return 0xff
 
 
 
