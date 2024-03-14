@@ -261,11 +261,10 @@ class QwiicKX13X(object):
 ##############################################################################################################################################
 
 
-"""BME680 Temperature, Pressure, Humidity & Gas Sensor."""
+"""BME680 Temperature, Pressure, Humidity & Gas Sensor. 
+Sensory library adapted for I2C protocol from pimoroni: https://github.com/pimoroni/bme680-python  """
+
 BME680_I2C_ADDRESS = 0x76
-
-
-
 
 __version__ = '1.1.1'
 
