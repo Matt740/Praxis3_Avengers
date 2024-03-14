@@ -187,6 +187,7 @@ class QwiicKX13X(object):
         self.i2c.write_byte(self.addr, self.KX13X_CNTL1, reg_value)
 
     def run_command_test(self):
+        '''Does self test on accelerometer ensuring it is working properly'''
         reg_val = self.i2c.read_byte(self.addr, self.KX13X_CNTL2)
         reg_val &= 0xBF
         reg_val |= (1 << 6)
@@ -733,17 +734,13 @@ class BME680(BME680Data):
             return int(duration + (factor * 64))
 
         return 0xff
-
-
-
-
-
-
-
-
-
-
-
+    
+    def _set_bits(self, register, mask, position, value):
+        """Mask out and set one or more bits in a register."""
+        temp = self.i2c._get_regs(self.addr, register, 1)
+        temp &= ~mask
+        temp |= value << position
+        self.i2c._set_regs(self.addr, register, temp)
 
 
 
