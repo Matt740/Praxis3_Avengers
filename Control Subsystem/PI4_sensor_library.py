@@ -5,9 +5,9 @@ import serial
 import gpiozero as GPIO 
 
 #BME680 imports
-from .BME680_constants import lookupTable1, lookupTable2
-from .BME680_constants import BME680Data
-from . import BME680_constants
+from BME680_constants import lookupTable1, lookupTable2
+from BME680_constants import BME680Data
+import BME680_constants
 import math
 
 
@@ -110,7 +110,11 @@ class QwiicKX13X(object):
     ZLSB = 4
     ZMSB = 5
 
+    COTR_DEF_STATE       =  0x55
+    COTR_POS_STATE       =  0xAA
+
     # Customization registers
+    KX13X_COTR             = 0x12
     KX13X_CNTL1            = 0x1B
     KX13X_CNTL2            = 0x1C
     KX13X_CNTL3            = 0x1D
@@ -181,6 +185,18 @@ class QwiicKX13X(object):
 
         #Send initialization to control register
         self.i2c.write_byte(self.addr, self.KX13X_CNTL1, reg_value)
+
+    def run_command_test(self):
+        reg_val = self.i2c.read_byte(self.addr, self.KX13X_CNTL2)
+        reg_val &= 0xBF
+        reg_val |= (1 << 6)
+        self.i2c.write_byte(self.addr, self.KX13X_CNTL2 , reg_val)
+
+        reg_val = self.i2c.read_byte(self.addr, self.KX13X_COTR)
+        if reg_val == self.COTR_POS_STATE:
+            return True
+        else:
+            return False
 
     def set_g_range(self, G_range):
         reg_val = self.i2c.read_byte(self.addr, self.KX13X_CNTL1)
