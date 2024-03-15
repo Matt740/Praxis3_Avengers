@@ -1,3 +1,6 @@
+
+#Note obselete as doesn't workj for PI 4 please do not use
+
 import machine
 import utime
 
