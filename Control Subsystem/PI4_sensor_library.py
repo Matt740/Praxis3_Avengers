@@ -764,6 +764,21 @@ x_pi = math.pi * 3000.0 / 180.0
 
 class L76B(object):
 
+    Lon = 0.0
+    Lat = 0.0
+    Lon_area = 'E'
+    Lat_area = 'W'
+    Time_H = 0
+    Time_M = 0
+    Time_S = 0
+    Status = 0
+    Lon_Baidu = 0.0
+    Lat_Baidu = 0.0
+    Lon_Google = 0.0
+    Lat_Google = 0.0
+
+    SET_NMEA_OUTPUT = '$PMTK314,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0'
+
     #Baud rate
     SET_NMEA_BAUDRATE          = '$PMTK251'
     SET_NMEA_BAUDRATE_115200   = 115200
@@ -910,7 +925,7 @@ class L76B(object):
 
 class Motor(object):
 
-    def __init__(self):
+    def __init__(self, PWM_pin):
         pass
 
     def set_direction(self, motor, direction):
