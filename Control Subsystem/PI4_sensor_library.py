@@ -10,8 +10,6 @@ from BME680_constants import BME680Data
 import BME680_constants
 import math
 
-
-
 # I2C RELEVANT CLASSES
 ###############################################################################################################
 #Defines I2C base commands for reading and writing bytes to sensors
@@ -77,7 +75,6 @@ def create_unified_i2c(bus=0):
     return i2c
 
 ###############################################################################################################################
-
 ##############################################################################################################################################
 
 # This code block is inspired by the code library provided by SparkFun Electornics https://github.com/sparkfun/Qwiic_KX13X_Py/blob/main/qwiic_kx13x.py#L58
@@ -278,8 +275,9 @@ class QwiicKX13X(object):
 ##############################################################################################################################################
 
 
-"""BME680 Temperature, Pressure, Humidity & Gas Sensor. 
-Sensory library adapted for I2C protocol from pimoroni: https://github.com/pimoroni/bme680-python  """
+##BME680 Temperature, Pressure, Humidity & Gas Sensor. 
+##Sensory library adapted for our I2C protocol from pimoroni: https://github.com/pimoroni/bme680-python 
+## In addition we added a couple functions for our dedicated need such as the get altitude function
 
 BME680_I2C_ADDRESS = 0x76
 
@@ -752,10 +750,11 @@ class BME680(BME680Data):
         else:
             return False
 
-
-
 ##############################################################################################################################################
 ##############################################################################################################################################
+
+## This code is inspired by the https://www.waveshare.com/wiki/Pico-GPS-L76B code module
+## We have adapted the code from this library for the raspberry pi 4. 
 
 UART_PIN = '/dev/ttyS0'
 Temp = '0123456789ABCDEF*'
@@ -903,4 +902,21 @@ class L76B(object):
     def uart_receiveString(self, value): 
         data = self.ser.read(value)
         return data
+    
+################################################################################################################################
+################################################################################################################################
+    
+## MOTOR CONTORL CLASSES
+
+class Motor(object):
+
+    def __init__(self):
+        pass
+
+    def set_direction(self, motor, direction):
+        pass
+
+    def set_speed(self, motor, speed):
+        pass
+
     
