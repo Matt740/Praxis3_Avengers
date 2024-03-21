@@ -2,6 +2,10 @@ import time
 from PI4_sensor_library import L76B
 from micropyGPS import MicropyGPS
 
+
+#set parser object
+parser = MicropyGPS(location_formatting='dd')
+
 Standby_Pin = 17
 Force_Pin = 27
 
@@ -10,16 +14,8 @@ gps = L76B(Standby_Pin, Force_Pin)
 gps.l76x_exit_backup_mode()
 gps.l76x_send_command(gps.SET_NMEA_BAUDRATE_9600)
 time.sleep(2)
-gps.l76x_send_command(gps.SET_SYNC_PPS_NMEA_ON)
-time.sleep(2)
 
-#Not sure if I need this?????
-#enable NMEA0183 sentence output
-gps.l76x_send_command(gps.SET_NMEA_OUTPUT) 
-time.sleep(2)
 
-#set parser object
-parser = MicropyGPS(location_formatting='dd')
 
 while True:
     sentence = parser.update(chr(gps.uart_receive_byte()[0]))
