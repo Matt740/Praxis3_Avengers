@@ -10,3 +10,4 @@ print(Accelerometer.get_g_range())
 for i in range(10):
     x_accel, y_accel, z_accel = Accelerometer.get_accel_data()
     print(f'Acceleration X: {x_accel}, y: {y_accel}, z: {z_accel}')
+    time.sleep(2)
