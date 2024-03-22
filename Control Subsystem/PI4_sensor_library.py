@@ -4,7 +4,7 @@ import math
 import serial
 import gpiozero as GPIO 
 import pigpio
-from picamera import PiCamera
+from picamera2 import Picamera2
 
 #BME680 imports
 from BME680_constants import lookupTable1, lookupTable2
@@ -942,7 +942,7 @@ class Motor(object):  ### Instatiate with this in name    pi = pigpio.pi()
 class PiNoir(object):
 
     def __init__(self, photo_filename):
-        self.camera = PiCamera()
+        self.camera = Picamera2()
         self.filename = photo_filename
 
     def capture_image(self, format = None, size = None):
