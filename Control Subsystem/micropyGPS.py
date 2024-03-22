@@ -628,10 +628,7 @@ class MicropyGPS(object):
     def new_fix_time(self):
         """Updates a high resolution counter with current time when fix is updated. Currently only triggered from
         GGA, GSA and RMC sentences"""
-        try:
-            self.fix_time = utime.ticks_ms()
-        except NameError:
-            self.fix_time = time.time()
+        self.fix_time = time.time()
 
     #########################################
     # User Helper Functions
@@ -671,11 +668,7 @@ class MicropyGPS(object):
 
         # Try calculating fix time using utime; if not running MicroPython
         # time.time() returns a floating point value in secs
-        try:
-            current = utime.ticks_diff(utime.ticks_ms(), self.fix_time)
-        except NameError:
-            current = (time.time() - self.fix_time) * 1000  # ms
-
+        current = (time.time() - self.fix_time) * 1000  # ms
         return current
 
     def compass_direction(self):

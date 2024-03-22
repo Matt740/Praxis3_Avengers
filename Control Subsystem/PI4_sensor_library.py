@@ -3,6 +3,7 @@ import time
 import math
 import serial
 import gpiozero as GPIO 
+from picamera import PiCamera
 
 #BME680 imports
 from BME680_constants import lookupTable1, lookupTable2
@@ -934,4 +935,35 @@ class Motor(object):
     def set_speed(self, motor, speed):
         pass
 
+####################################################################################################################################
+####################################################################################################################################
     
+## Raspberry Pi Noir CLASSES
+    
+class PiNoir(object):
+
+    def __init__(self, photo_filename):
+        self.camera = PiCamera()
+        self.filename = photo_filename
+
+    def capture_image(self, format = None, size = None):
+        try:
+            self.camera.start_preview()
+            time.sleep(2)
+            self.camera.capture(self.filename, format=format, resize=size)
+        except Exception: 
+            return False
+        return True
+
+    def continous_caputre(self, format = None, size = None, num_photos = 2, delay = 1):
+        try:
+            self.camera.start_preview()
+            time.sleep(2)
+            for i in range(num_photos):
+                self.camera.capture_continuous(self.filename, format=format, resize=size)
+                #Should do somehting here wiht photo before it is replaced
+                time.sleep(delay)
+        except Exception:
+            return False
+        return True
+            
