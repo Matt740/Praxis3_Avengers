@@ -14,9 +14,7 @@ i2c_network = Accelerometer.i2c
 Barometer = BME680(1, i2c_network, 1015.1)
 
 #set up parser
-GPS_Parser = MicropyGPS(location_formatting='dd')
-if not GPS_Parser.start_logging("loggedGPS.txt"):
-    print("Error opening File")
+parser = MicropyGPS(location_formatting='dd')
 
 #Inialize GPS Varibales
 STANDBY = 17
@@ -29,8 +27,11 @@ time.sleep(2)
 gps.l76x_send_command(gps.SET_NMEA_BAUDRATE_9600)
 time.sleep(2)
 
+log = open("gps.csv", "w")
+log.write("Latitude Degree, Lattitude, Longitude Degree, Longitude, Sattelites in Use")
+i = 0
 
-while True:
+while i < 10:
     #Print readout form i2c sensors
     x_a, y_a, z_a = Accelerometer.get_accel_data()
     alt = Barometer.get_altitude()
@@ -38,19 +39,19 @@ while True:
     print("DATA READOUT\n ACCELEROMETER| X: ", x_a, "g, Y: ", y_a, "g, Z:", z_a, "g\n Barometer| Pressure: ", pressure, "hpa, Altitude: ", alt, "m")
 
     # Update gps parser
-    sentence = GPS_Parser.update(chr(gps.uart_receive_byte()[0]))
+    sentence = parser.update(chr(gps.uart_receive_byte()[0]))
     if sentence:
         print("GPS|")
-        print('WGS84 Coordinate:Latitude(%c),Longitude(%c) %.9f,%.9f'%(GPS_Parser.latitude[1],GPS_Parser.longitude[1],GPS_Parser.latitude[0],GPS_Parser.longitude[0]))
-        print('UTC Timestamp:%d:%d:%d'%(GPS_Parser.timestamp[0],GPS_Parser.timestamp[1],GPS_Parser.timestamp[2]))
-        print('Horizontal Dilution of Precision:', GPS_Parser.hdop)
-        print('Satellites in Use by Receiver:',GPS_Parser.satellites_in_use)
+        print('WGS84 Coordinate:Latitude(%c),Longitude(%c) %.9f,%.9f'%(parser.latitude[1],parser.longitude[1],parser.latitude[0],parser.longitude[0]))
+        print('UTC Timestamp:%d:%d:%d'%(parser.timestamp[0],parser.timestamp[1],parser.timestamp[2]))
+        print('Horizontal Dilution of Precision:', parser.hdop)
+        print('Satellites in Use by Receiver:',parser.satellites_in_use)
 
 
     interrupt = random.randint(5,9)
     if interrupt == 7:
-        GPS_Parser.write_log(GPS_Parser.latitude_string()+GPS_Parser.longitude_string())
-        print("INTERUPTED - GPS Saved in File")
+        log.write('%.9f, %c, %.9f, %c, %i'%(parser.latitude[0], parser.latitude[1], parser.longitude[0], parser.longitude[1], parser.satellites_in_use))
+        
 
     print("------------------------------------------------------------------------------------")
     time.sleep(1)

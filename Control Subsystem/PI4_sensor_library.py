@@ -3,7 +3,7 @@ import time
 import math
 import serial
 import gpiozero as GPIO 
-from picamera import PiCamera
+from picamera2 import Picamera2
 
 #BME680 imports
 from BME680_constants import lookupTable1, lookupTable2
@@ -939,7 +939,7 @@ class Motor(object):
 ####################################################################################################################################
     
 ## Raspberry Pi Noir CLASSES
-    
+## Must change to Picamera 2
 class PiNoir(object):
 
     def __init__(self, photo_filename):
