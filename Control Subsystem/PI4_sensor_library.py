@@ -3,6 +3,7 @@ import time
 import math
 import serial
 import gpiozero as GPIO 
+import pigpio
 from picamera import PiCamera
 
 #BME680 imports
@@ -922,18 +923,16 @@ class L76B(object):
 ################################################################################################################################
 ################################################################################################################################
     
-## MOTOR CONTORL CLASSES
+## MOTOR CONTROL CLASSES
 
-class Motor(object):
+class Motor(object):  ### Instatiate with this in name    pi = pigpio.pi() 
 
-    def __init__(self, PWM_pin):
-        pass
+    def __init__(self, pi, PWM_pin): #Pin is 0-31
+        self.pin = PWM_pin
+        self.pi = pi
 
-    def set_direction(self, motor, direction):
-        pass
-
-    def set_speed(self, motor, speed):
-        pass
+    def set_speed(self, speed): #takes in motor object and speed to set it to. speed 0-255
+        self.pi.set_PWM_dutycycle(self.pin, speed) # PWM full 
 
 ####################################################################################################################################
 ####################################################################################################################################
