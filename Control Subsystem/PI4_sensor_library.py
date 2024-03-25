@@ -114,6 +114,8 @@ class QwiicKX13X(object):
     COTR_POS_STATE       =  0xAA
 
     # Customization registers
+    KX13X_INS1             = 0x16
+    KX13X_INS2             = 0x17
     KX13X_COTR             = 0x12
     KX13X_CNTL1            = 0x1B
     KX13X_CNTL2            = 0x1C
@@ -236,17 +238,10 @@ class QwiicKX13X(object):
 
     def get_raw_accel_values(self):
 
-        reg_val = self.i2c.read_byte(self.addr, self.KX13X_INC4) #These next two lines sketch me out
-        if reg_val & 0x40:
-            accel_data = self.i2c.read_byte_block(self.addr, self.KX13X_XOUT_L, self.TOTAL_ACCEL_DATA_16BIT)
-            xData = int.from_bytes(accel_data[0:2], byteorder='little', signed=True)
-            yData =  int.from_bytes(accel_data[2:4], byteorder='little', signed=True)
-            zData =  int.from_bytes(accel_data[4:6], byteorder='little', signed=True)
-        else:
-            accel_data = self.i2c.read_byte_block(self.addr, self.KX13X_XOUT_L, self.TOTAL_ACCEL_DATA_8BIT)
-            xData = int.from_bytes(self.i2c.read_byte(self.addr, self.KX13X_XOUT_H), signed=True)
-            yData = int.from_bytes(self.i2c.read_byte(self.addr, self.KX13X_XOUT_H), signed=True)
-            zData = int.from_bytes(self.i2c.read_byte(self.addr, self.KX13X_XOUT_H), signed=True)
+        accel_data = self.i2c.read_byte_block(self.addr, self.KX13X_XOUT_L, self.TOTAL_ACCEL_DATA_16BIT)
+        xData = int.from_bytes(accel_data[0:2], byteorder='little', signed=True)
+        yData =  int.from_bytes(accel_data[2:4], byteorder='little', signed=True)
+        zData =  int.from_bytes(accel_data[4:6], byteorder='little', signed=True)
 
         self.raw_output_datax = xData
         self.raw_output_datay = yData
