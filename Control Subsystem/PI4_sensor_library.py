@@ -85,6 +85,7 @@ def create_unified_i2c(bus=0):
 
 KX13X_I2C_ADDRESS = 0x1F
 
+
 #Accelerometer
 class QwiicKX13X(object):
 
@@ -128,6 +129,11 @@ class QwiicKX13X(object):
     KX13X_INC5             = 0x26
     KX13X_INC6             = 0x27
     KX13X_XOUT_L           = 0x08
+    KX13X_XOUT_H           = 0x09
+    KX13X_YOUT_L           = 0x0A
+    KX13X_YOUT_H           = 0x0B
+    KX13X_ZOUT_L           = 0x0C
+    KX13X_ZOUT_H           = 0x0D
 
 
     def __init__(self, bus=None, network=None, addr=KX13X_I2C_ADDRESS):
@@ -233,14 +239,14 @@ class QwiicKX13X(object):
         reg_val = self.i2c.read_byte(self.addr, self.KX13X_INC4) #These next two lines sketch me out
         if reg_val & 0x40:
             accel_data = self.i2c.read_byte_block(self.addr, self.KX13X_XOUT_L, self.TOTAL_ACCEL_DATA_16BIT)
-            xData = (accel_data[self.XMSB] << 8) | accel_data[self.XLSB]
-            yData = (accel_data[self.YMSB] << 8) | accel_data[self.YLSB]
-            zData = (accel_data[self.ZMSB] << 8) | accel_data[self.ZLSB]
+            xData = int.from_bytes(accel_data[0:2], byteorder='little', signed=True)
+            yData =  int.from_bytes(accel_data[2:4], byteorder='little', signed=True)
+            zData =  int.from_bytes(accel_data[4:6], byteorder='little', signed=True)
         else:
             accel_data = self.i2c.read_byte_block(self.addr, self.KX13X_XOUT_L, self.TOTAL_ACCEL_DATA_8BIT)
-            xData = accel_data[0]
-            yData = accel_data[1]
-            zData = accel_data[2]
+            xData = int.from_bytes(self.i2c.read_byte(self.addr, self.KX13X_XOUT_H), signed=True)
+            yData = int.from_bytes(self.i2c.read_byte(self.addr, self.KX13X_XOUT_H), signed=True)
+            zData = int.from_bytes(self.i2c.read_byte(self.addr, self.KX13X_XOUT_H), signed=True)
 
         self.raw_output_datax = xData
         self.raw_output_datay = yData
