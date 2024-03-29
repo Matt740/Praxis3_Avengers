@@ -273,6 +273,7 @@ class FieldData:
         self.humidity = None
         # Gas resistance in Ohms
         self.gas_resistance = None
+        self.altitude = None
 
 
 class CalibrationData:

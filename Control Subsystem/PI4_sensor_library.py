@@ -306,7 +306,7 @@ class BME680(BME680Data):
 
     """
 
-    def __init__(self, bus=None, network=None, sea_level_pressure=1000, addr=BME680_I2C_ADDRESS):
+    def __init__(self, bus=None, network=None, sea_level_pressure=1000, sea_level_temperature=8, starting_altitude=None, addr=BME680_I2C_ADDRESS):
         """Initialise BME680 sensor instance and verify device presence.
         """
         if network == None:
@@ -317,6 +317,8 @@ class BME680(BME680Data):
 
         # Added stuff to make it actually work on PI and get altitude
         self.sea_level_pressure = sea_level_pressure
+        self.sea_level_tempK = sea_level_temperature + 273.15
+        self.starting_alt = starting_altitude
         self.data = BME680_constants.FieldData()
         self.calibration_data = BME680_constants.CalibrationData()
         self.tph_settings = BME680_constants.TPHSettings()
@@ -747,9 +749,13 @@ class BME680(BME680Data):
 
     def get_altitude(self):
         if self.get_sensor_data():
-            alt = 44307.69396 * (1 - (( self.data.pressure / self.sea_level_pressure) ** 0.190284))
-            self.altitude = alt
-            return alt
+            if self.starting_alt == None:
+                alt = (self.sea_level_tempK/-0.0065)*(((self.data.pressure/self.sea_level_pressure)**0.190263)-1)
+                self.data.altitude = alt
+            else: 
+                alt = (self.sea_level_tempK/-0.0065)*(((self.data.pressure/self.sea_level_pressure)**0.190263)-1) - self.starting_alt
+                self.data.altitude = alt
+            return True
         else:
             return False
 
