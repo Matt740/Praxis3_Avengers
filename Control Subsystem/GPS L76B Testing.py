@@ -3,22 +3,26 @@ from PI4_sensor_library import L76B
 from micropyGPS import MicropyGPS
 
 
-#set parser object
+#Initialize parser object whihc will be used to Parse NMEA sentences from L76B
 parser = MicropyGPS(location_formatting='dd')
 
-Standby_Pin = 17
-Force_Pin = 27
-
+# Set constant variables for pin numbers and Baudrate
+STANDY_PIN = 17
+FORCE_PIN = 27
 BAUDRATE = 9600
-gps = L76B(Standby_Pin, Force_Pin)
+
+#Initialize GPS class with force and stsandby pins
+gps = L76B(STANDY_PIN, FORCE_PIN)
+
+# Wake up GPS and then send it info over serial communication to configure it's on board baudrate
 gps.l76x_exit_backup_mode()
 gps.l76x_send_command(gps.SET_NMEA_BAUDRATE_9600)
 time.sleep(2)
 
-
-
+#Loop and keep recieving bytes over serial communication form the L76B and pur them through the parser to start forming lattitude and longittude
 while True:
     sentence = parser.update(chr(gps.uart_receive_byte()[0]))
+    #Once a full sentence has been parsed and is ready to be print this if statemnt will be entered and the info the parser has collected will be printed 
     if sentence:
             
         print('WGS84 Coordinate:Latitude(%c),Longitude(%c) %.9f,%.9f'%(parser.latitude[1],parser.longitude[1],parser.latitude[0],parser.longitude[0]))

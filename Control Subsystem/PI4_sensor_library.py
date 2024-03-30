@@ -951,25 +951,19 @@ class PiNoir(object):
     def __init__(self, photo_filename):
         self.camera = Picamera2()
         self.filename = photo_filename
+        self.camera.configure(self.camera.still_configuration())
 
     def capture_image(self, format = None, size = None):
         try:
+            self.camera.configure(self.camera.still_configuration())
             self.camera.start_preview()
+            self.camera.start()
             time.sleep(2)
-            self.camera.capture(self.filename, format=format, resize=size)
+            self.camera.capture_file(self.filename)
         except Exception: 
             return False
         return True
 
     def continous_caputre(self, format = None, size = None, num_photos = 2, delay = 1):
-        try:
-            self.camera.start_preview()
-            time.sleep(2)
-            for i in range(num_photos):
-                self.camera.capture_continuous(self.filename, format=format, resize=size)
-                #Should do somehting here wiht photo before it is replaced
-                time.sleep(delay)
-        except Exception:
-            return False
-        return True
+        pass
             
