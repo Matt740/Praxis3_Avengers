@@ -945,25 +945,41 @@ class Motor(object):  ### Instatiate with this in name    pi = pigpio.pi()
 ####################################################################################################################################
     
 ## Raspberry Pi Noir CLASSES
-## Must change to Picamera 2
+
 class PiNoir(object):
 
     def __init__(self, photo_filename):
         self.camera = Picamera2()
         self.filename = photo_filename
-        self.camera.configure(self.camera.still_configuration())
 
     def capture_image(self, format = None, size = None):
         try:
-            self.camera.configure(self.camera.still_configuration())
+            self.camera.configure(self.camera.still_configuration)
             self.camera.start_preview()
             self.camera.start()
             time.sleep(2)
             self.camera.capture_file(self.filename)
-        except Exception: 
+            self.camera.stop_preview()
+            self.camera.stop()
+        except Exception as e: 
+            print("An error occurred:", type(e).__name__, " - ", e)
             return False
         return True
 
     def continous_caputre(self, format = None, size = None, num_photos = 2, delay = 1):
-        pass
+        self.camera.configure(self.camera.still_configuration)
+        self.camera.start_preview()
+        self.camera.start()
+        time.sleep(2)
+        for i in range(num_photos):
+            try:
+                self.camera.capture_file(self.filename)
+                time.sleep(delay)
+            except Exception as e:
+                print('Error on ', i + 1, "th photo")
+                print("An error occurred:", type(e).__name__, " - ", e)
+                return False
+        self.camera.stop_preview()
+        self.camera.stop()
+        return True
             
