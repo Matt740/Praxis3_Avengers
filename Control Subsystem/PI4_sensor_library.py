@@ -273,6 +273,19 @@ class QwiicKX13X(object):
         self.get_raw_accel_values()
         self.conv_raw_accel_values()
         return self.accelx, self.accely, self.accelz
+    
+    def get_orientation(self):
+        self.get_accel_data()
+        self.get_pitch()
+        self.get_roll()
+        return self.pitch, self.roll
+
+    def get_pitch(self):
+        self.pitch = math.asin(self.accelx)
+    
+    def get_roll(self):
+        self.roll = math.atan(self.accely/self.accelx)
+
 
 ##############################################################################################################################################
 ##############################################################################################################################################
