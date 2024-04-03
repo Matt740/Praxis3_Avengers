@@ -944,15 +944,42 @@ class L76B(object):
 ################################################################################################################################
     
 ## MOTOR CONTROL CLASSES
+    
+def set_motors(motor_list = [], PWM_strength=0):
+    if PWM_strength < 0: 
+        PWM_strength = 0
+    elif PWM_strength > 254:
+        PWM_strength = 254
+
+    if len(motor_list) > 0:
+        for motor in motor_list:
+            try:
+                motor.set_speed(PWM_strength)
+            except Exception as e:
+                print('Error on item', motor)
+                print("The following error occurred:", type(e).__name__, " - ", e)
+                print("Aborting all motors")
+                for motor in motor_list:
+                    try:
+                        motor.set_speed(0)
+                    except Exception:
+                        continue
+                return False
+        return True
+    else:
+        print("Motor list is empty")
+        return False
 
 class Motor(object):  ### Instatiate with this in name    pi = pigpio.pi() 
 
     def __init__(self, pi, PWM_pin): #Pin is 0-31
         self.pin = PWM_pin
         self.pi = pi
+        self.speed = 0
 
     def set_speed(self, speed): #takes in motor object and speed to set it to. speed 0-255
         self.pi.set_PWM_dutycycle(self.pin, speed) # PWM full 
+        self.speed = speed
 
 ####################################################################################################################################
 ####################################################################################################################################
