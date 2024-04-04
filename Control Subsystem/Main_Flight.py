@@ -22,30 +22,28 @@ motor_RR.set_speed(0)
 print("Motor Speed Initialized to Zero")
 time.sleep(3)
 
-#Main Flight Loop Code 
-while True:
-    # Spin Up motors to speed that gets to nearly psoitve trust to weight
-    for i in range(215):
+#Main Flight Loop Code
+# Spin Up motors to speed that gets to nearly psoitve trust to weight
+for i in range(210):
         if not set_motors(motors, i):
             break
         time.sleep(0.25)
 
-    # Run feedback loop which will take user input 
-    feedback = None
-    while feedback != "end":
-        feedback = input("UP or Down? U/D: ")
-        speed = input("Wanted Signal Change: ")
-        if feedback == "U":
-            new_speed = motor_FL.speed + speed 
-        if feedback == "D":
-            new_speed = motor_FL.speed - speed 
+# Run feedback loop which will take user input 
+feedback = None 
+while feedback != "end":
+    feedback = input("UP or Down? U/D: ")
+    speed = int(input("Wanted Signal Change: "))
+    if feedback == "U":
+        new_speed = motor_FL.speed + speed 
+    if feedback == "D":
+        new_speed = motor_FL.speed - speed 
 
-    for i in range(motor_FL.speed - 1, -1, -1):
-        if not set_motors(motors, i):
-            break
-        time.sleep(0.15)
-        
-    break
+# Step down motors 
+for i in range(motor_FL.speed - 1, -1, -1):
+    if not set_motors(motors, i):
+        break
+    time.sleep(0.1)
 
 
 

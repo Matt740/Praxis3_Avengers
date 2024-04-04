@@ -978,6 +978,10 @@ class Motor(object):  ### Instatiate with this in name    pi = pigpio.pi()
         self.speed = 0
 
     def set_speed(self, speed): #takes in motor object and speed to set it to. speed 0-255
+        if speed > 255:
+            speed = 255
+        elif speed < 0:
+            speed = 0
         self.pi.set_PWM_dutycycle(self.pin, speed) # PWM full 
         self.speed = speed
 
