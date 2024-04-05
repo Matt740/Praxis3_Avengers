@@ -1,11 +1,9 @@
 # Praxis3_Avengers
-The best of the best.
+"Everybody wanted to know what we would do if it didn't fly, I guess we'll never know" **mic drop**
 
-This document outlines the software files in our repository being used for our project
+This document outlines the software files in our repository being used for our project. All of the code in this repository was used in the testing, prototyping, and final prototype of our Praxis 3 project. The repository is split into two main folders. These folders are for the two subsystems which require programming during our project. 
 
-**I2C SENSORS***
-When using any sensors with microcontrollers such as the Pico it is best to have one file which contains all the classes and code base for all the needed sensors.
-In this project that file is sensors.py. if you are using a new sensor please add a class object for that sensor in the sensors.py file and follow along with how the other sensors class objects have been created. There are sensor object must have an __init__ function with the following parameters (self, bus=None, freq=None, sda=None, scl=None, network=None, addr=#Device I2C adress#). You can also include other parameters if you need them for that specific sensor. You'll notice that there are also two other classes at the top of sensor.py. These are for using i2C on the Pico and initializing I2C buses. Please use these in your definition of a new sensor's class object. You should be able to follow along with the BMP280 sensors init function for the I2C initialization. For any specific questions on I2C please reach out to Brody thanks. 
+# Control Subsystem 
+The control subsystem is in charge of controlling all sensors and external devices on the drone and must control flight and image detection processes. This is the most populated folder in our repository and it is split into two sub-folders. Those being **Testing Code** and **Device Libraries**.
 
-**Ensuring an I2C Device is Connected Properly***
-If you are connecting a new sensor to a Pico and you want to make sure the sensor can communicate with the board please use Detect_i2c_Device.py. It scans your I2C SDA for attached devices and returns each device's address. This is always a good sanity check to do before running a main program. Note the scanner is currently set to use pins 16 and 17 so if you are using different I2C pins on the Pico you must change this in the code. In addition to telling you if the connection is made, the program returns the sensor address. This is useful if you do not know it as it will be needed to communicate with the sensor over I2C. 
+
