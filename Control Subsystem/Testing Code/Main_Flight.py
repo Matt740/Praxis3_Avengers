@@ -12,7 +12,7 @@ motor_RR = Motor(pi, 24)
 motors = [motor_FL, motor_FR, motor_RL, motor_RR]
 
 camera = PiNoir("TrashPick.jpg")
-model = YOLO("YOLOv8n.pt")
+model = YOLO("best.pt")
 
 motor_FL.set_speed(0)
 motor_FR.set_speed(0)
@@ -33,7 +33,8 @@ for i in range(20, 195):
     time.sleep(0.25)
 
 # Run feedback loop which will take user input 
-feedback = None 
+feedback = None
+count = 0
 while feedback != "X":
     feedback = input("UP or Down? U/D/X: ")
     speed = int(input("Wanted Signal Change: "))
@@ -51,6 +52,12 @@ while feedback != "X":
         motor_FR.set_speed(new_speed*1.17)
         motor_RL.set_speed(new_speed)
         motor_RR.set_speed(new_speed)
+    filename = 'Image{count}.jpg'
+    if camera.capture_image(filename):
+        print("Succesfully Took Image")
+        results = model.predict(source=filename, save = True)
+        count = count + 1
+
 
 # Step down motors 
 for i in range(motor_FL.speed - 1, -1, -1):
@@ -58,7 +65,7 @@ for i in range(motor_FL.speed - 1, -1, -1):
     motor_FR.set_speed(i*1.17)
     motor_RL.set_speed(i)
     motor_RR.set_speed(i)
-    time.sleep(0.15)
+    time.sleep(0.1)
 
 
 

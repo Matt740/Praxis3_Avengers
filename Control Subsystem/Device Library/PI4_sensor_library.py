@@ -803,12 +803,12 @@ class L76B(object):
 
     #Baud rate
     SET_NMEA_BAUDRATE          = '$PMTK251'
-    SET_NMEA_BAUDRATE_115200   = 115200
-    SET_NMEA_BAUDRATE_57600    = 57600
-    SET_NMEA_BAUDRATE_38400    = 38400
-    SET_NMEA_BAUDRATE_19200    = 19200
-    SET_NMEA_BAUDRATE_9600     = 9600
-    SET_NMEA_BAUDRATE_4800     = 4800
+    SET_NMEA_BAUDRATE_115200   = '$PMTK251, 115200'
+    SET_NMEA_BAUDRATE_57600    = '$PMTK251, 57600'
+    SET_NMEA_BAUDRATE_38400    = '$PMTK251, 38400'
+    SET_NMEA_BAUDRATE_19200    = '$PMTK251, 19200'
+    SET_NMEA_BAUDRATE_9600     = '$PMTK251, 9600'
+    SET_NMEA_BAUDRATE_4800     = '$PMTK251, 4800'
 
     #Switching time output
     SET_SYNC_PPS_NMEA_OFF   = '$PMTK255,0'
@@ -996,13 +996,16 @@ class PiNoir(object):
         self.camera = Picamera2()
         self.filename = photo_filename
 
-    def capture_image(self, format = None, size = None):
+    def capture_image(self, format = None, size = None, filename = None):
         try:
             self.camera.configure(self.camera.still_configuration)
             self.camera.start_preview()
             self.camera.start()
             time.sleep(2)
-            self.camera.capture_file(self.filename)
+            if filename == None:
+                self.camera.capture_file(self.filename)
+            else:
+                self.camera.capture_file(filename)
             self.camera.stop_preview()
             self.camera.stop()
         except Exception as e: 
@@ -1010,7 +1013,7 @@ class PiNoir(object):
             return False
         return True
 
-    def continous_caputre(self, format = None, size = None, num_photos = 2, delay = 1):
+    def continous_capture(self, format = None, size = None, num_photos = 2, delay = 1):
         self.camera.configure(self.camera.still_configuration)
         self.camera.start_preview()
         self.camera.start()
