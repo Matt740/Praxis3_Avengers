@@ -16,5 +16,8 @@ The control subsystem is in charge of controlling all sensors and external devic
     This folder contains old code that was made for the control subsystem. This is remenat code from when we planned to use the Raspberry Pi Pico but as our computational demands changed we upgrade to the Raspeberry Pi 4 and thus ahd to chnage the code that was already written. 
 
 # Detection Subsytem
+The detection subsystem is in charge of retrieving images from a database, training the model based on the database, and testing the trained model with either some images found through the internet, or testing by connecting the model to the webcam, which allows real-time object detection.
+
+
 
 
