@@ -18,6 +18,10 @@ The control subsystem is in charge of controlling all sensors and external devic
 # Detection Subsytem
 The detection subsystem is in charge of retrieving images from a database, training the model based on the database, and testing the trained model with either some images found through the internet, or testing by connecting the model to the webcam, which allows real-time object detection.
 
+In the detection subsystem folder, there are 5 code files, and two folders. The get_data file is used to download the dataset from the web to the local computer. The dataset is then used to train the model using the train_model file. After the model has been trained, the users can get the model's info (its class names) from the get_info file, and perform manual testing with either selected images or the webcam from the test files.
+
+Some of the results of our tests are stored in runs/detect/Drone Testing. While the model is stored as best.pt in the filepath runs/detect/train16/weights.
+
 
 
 

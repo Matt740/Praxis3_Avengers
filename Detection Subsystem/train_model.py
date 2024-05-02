@@ -1,6 +1,10 @@
 from ultralytics import YOLO
 
-model = YOLO("yolov8s.pt")
+# This is the code that trains the model
 
-results = model.train(data = "E_Waste_Detection-2/data.yaml", plots = True, epochs = 1)
+# Choose the model you want to train (yolov8n.pt, yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt) for nano, small, medium, large, and extra large respectively
+model = YOLO("yolov8m.pt")
+
+# This is the code that trains the model with specific parameters
+results = model.train(data = "datasets/data.yaml", plots = True, epochs = 100, device = 0, imgsz = 640)
 
